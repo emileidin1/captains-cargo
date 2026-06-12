@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Captain's Cargo – Math at Sea</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sky-top:#0c0a1e;--sky-bot:#1a2a4a;--ocean-mid:#0d2137;--ocean-deep:#061020;
+  --ocean-surf:#1a4a6b;--wave:#2a6b9a;--gold:#f5c842;--gold-dim:#a88820;
+  --safe:#2ecc71;--warn:#f39c12;--danger:#e74c3c;
+  --panel:rgba(8,18,35,.9);--pb:rgba(42,107,154,.45);
+  --text:#ddeeff;--dim:#6a9bbb;
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(175deg,var(--sky-top) 0%,var(--sky-bot) 38%,var(--ocean-mid) 100%);min-height:100vh;color:var(--text);overflow:hidden;user-select:none}
+
+/* STARS */
+#stars{position:fixed;inset:0;pointer-events:none;z-index:0}
+.star{position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--dur,3s) ease-in-out infinite alternate;animation-delay:var(--dly,0s)}
+@keyframes twinkle{from{opacity:.1}to{opacity:.9}}
+
+/* HEADER */
+#hdr{position:relative;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:8px 18px;background:rgba(0,0,0,.55);border-bottom:1px solid var(--pb);height:48px}
+#hdr h1{font-size:1.15rem;color:var(--gold);letter-spacing:1px;text-shadow:0 0 18px rgba(245,200,66,.4)}
+.pills{display:flex;gap:8px}
+.pill{background:var(--panel);border:1px solid var(--pb);border-radius:20px;padding:4px 12px;font-size:.75rem;color:var(--dim)}
+.pill b{color:var(--gold)}
+
+/* LAYOUT */
+#layout{position:relative;z-index:5;display:grid;grid-template-columns:200px 1fr 170px;height:calc(100vh - 48px)}
+
+/* CARGO PANEL */
+#cargo-panel{background:var(--panel);border-right:1px solid var(--pb);padding:12px;overflow-y:auto;z-index:10;display:flex;flex-direction:column;gap:6px}
+#cargo-panel h2{font-size:.7rem;text-transform:uppercase;letter-spacing:2px;color:var(--dim);padding-bottom:6px;border-bottom:1px solid var(--pb);flex-shrink:0}
+.ci{display:flex;align-items:center;gap:7px;padding:7px 9px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:7px}
+.ci-icon{font-size:1.25rem;flex-shrink:0}
+.ci-name{font-size:.78rem;font-weight:600}
+.ci-b{font-size:.67rem;color:var(--danger);margin-top:1px}
+.ci-c{font-size:.62rem;color:var(--dim);margin-top:1px;line-height:1.3}
+#cargo-total{margin-top:auto;padding-top:8px;border-top:1px solid var(--pb);flex-shrink:0}
+#cargo-total .lbl{font-size:.67rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+#cargo-total .val{font-size:1.4rem;font-weight:bold;color:var(--danger)}
+
+/* GAME VIEW */
+#game-view{position:relative;overflow:hidden}
+#game-view::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent,rgba(6,16,32,.5));pointer-events:none;z-index:1}
+
+/* horizon clouds */
+.hcloud{position:absolute;border-radius:50px;background:rgba(30,50,80,.6);filter:blur(12px);z-index:2}
+
+/* water */
+#water{position:absolute;left:0;right:0;bottom:0;height:45%;background:linear-gradient(180deg,var(--ocean-surf),var(--ocean-deep));z-index:2}
+.wl{position:absolute;left:-150%;right:-150%;border-radius:40%;animation:wv var(--spd,9s) linear infinite}
+.wl:nth-child(1){background:rgba(42,107,154,.5);height:48px;top:-18px;--spd:8s}
+.wl:nth-child(2){background:rgba(30,80,120,.45);height:42px;top:-8px;--spd:11s;animation-direction:reverse}
+.wl:nth-child(3){background:rgba(20,60,100,.35);height:36px;top:0;--spd:13s}
+@keyframes wv{0%{transform:translateX(0) scaleY(1)}50%{transform:translateX(20%) scaleY(.75)}100%{transform:translateX(40%) scaleY(1)}}
+
+/* SHIP */
+#ship-wrap{position:absolute;z-index:10;left:22%;will-change:transform}
+#ship-emoji{font-size:6rem;display:block;filter:drop-shadow(0 8px 16px rgba(0,0,0,.7));transition:filter .4s}
+#ship-reflect{font-size:4.5rem;display:block;opacity:.1;filter:blur(3px) saturate(.3);transform:scaleY(-.25) translateY(-12px);margin-top:-22px;pointer-events:none}
+
+/* Ship states */
+.ship-hit #ship-emoji{animation:hit-flash .12s linear 5!important}
+@keyframes hit-flash{0%,100%{filter:drop-shadow(0 8px 16px rgba(0,0,0,.7))}50%{filter:drop-shadow(0 0 24px #f00) brightness(2.5)}}
+.ship-crit #ship-emoji{filter:drop-shadow(0 4px 20px rgba(231,76,60,.9))!important}
+
+/* HAZARDS */
+.hazard{position:absolute;z-index:8;display:flex;align-items:center;justify-content:center;border-radius:50%;pointer-events:none;will-change:transform;top:0;left:0}
+.haz-label{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:.6rem;color:rgba(255,255,255,.6);white-space:nowrap}
+
+/* WARNING ARROWS */
+.warn-arrow{position:absolute;right:6px;z-index:18;font-size:1.1rem;pointer-events:none;display:flex;align-items:center;gap:2px;animation:wpulse .5s ease-in-out infinite alternate}
+@keyframes wpulse{from{opacity:.4;right:6px}to{opacity:1;right:10px}}
+
+/* SCORE POPUPS */
+.score-pop{position:absolute;z-index:20;font-weight:bold;pointer-events:none;animation:spop 1.1s ease forwards;white-space:nowrap}
+@keyframes spop{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-55px) scale(.7)}}
+
+/* HUD OVERLAYS */
+#ctrl-hint{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:7px 18px;font-size:.78rem;color:var(--dim);z-index:20;pointer-events:none;transition:opacity 1.5s;white-space:nowrap}
+
+#speed-hud{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;z-index:20;font-size:.72rem;color:var(--dim)}
+#speed-track{width:72px;height:5px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden}
+#speed-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--safe),var(--gold));width:50%;transition:width .15s}
+
+#dist-hud{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.5);border:1px solid var(--pb);border-radius:16px;padding:4px 14px;font-size:.75rem;color:var(--dim);z-index:20;pointer-events:none}
+#dist-hud b{color:var(--gold)}
+
+/* SAIL BUTTON */
+#sail-wrap{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:20}
+#sail-btn{padding:11px 34px;background:linear-gradient(135deg,#1a4a6b,#2a6b9a);border:1px solid var(--wave);border-radius:10px;color:#fff;font-size:.9rem;font-weight:600;letter-spacing:1px;cursor:pointer;transition:all .2s;box-shadow:0 4px 20px rgba(42,107,154,.4)}
+#sail-btn:hover:not(:disabled){background:linear-gradient(135deg,#2a6b9a,#3a8bc0);transform:translateY(-2px)}
+#sail-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* ANIM STAGE */
+#anim-stage{position:absolute;inset:0;z-index:12;pointer-events:none;overflow:hidden}
+.ev-caption{position:absolute;bottom:38%;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.18);border-radius:24px;padding:8px 20px;font-size:.88rem;font-weight:600;color:#fff;white-space:nowrap;z-index:30;opacity:0;animation:caprise .4s .2s cubic-bezier(.33,1,.68,1) forwards}
+@keyframes caprise{to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+/* BIRDS */
+.anim-bird{position:absolute;width:26px;height:13px;pointer-events:none;z-index:22;animation:bflap var(--fl,.22s) ease-in-out infinite alternate;animation-delay:var(--fd,0s)}
+.anim-bird::before,.anim-bird::after{content:'';position:absolute;top:2px;width:12px;height:7px;border-top:2.5px solid rgba(220,235,255,.88)}
+.anim-bird::before{left:0;border-radius:60% 0 0 0;transform-origin:right bottom}
+.anim-bird::after{right:0;border-radius:0 60% 0 0;transform-origin:left bottom}
+.anim-bird .bdy{position:absolute;left:50%;top:4px;width:4px;height:4px;border-radius:50%;background:rgba(200,220,255,.7);transform:translateX(-50%)}
+@keyframes bflap{from{transform:scaleY(.5)}to{transform:scaleY(1.2)}}
+.anim-duck{position:absolute;font-size:2.6rem;pointer-events:none;z-index:22;filter:drop-shadow(0 3px 6px rgba(0,0,0,.4))}
+.anim-cloud{position:absolute;border-radius:60px;pointer-events:none;z-index:16;filter:blur(10px)}
+.anim-rain{position:absolute;width:1.5px;border-radius:2px;background:linear-gradient(transparent,rgba(160,210,255,.65));pointer-events:none;z-index:17;animation:rfall var(--rd,.5s) linear infinite;animation-delay:var(--rdy,0s)}
+@keyframes rfall{from{transform:translateY(-40px) rotate(8deg);opacity:0}20%{opacity:1}to{transform:translateY(120px) rotate(8deg);opacity:.3}}
+.anim-lflash{position:absolute;inset:0;background:rgba(200,220,255,.35);pointer-events:none;z-index:18;animation:lf .12s ease forwards}
+@keyframes lf{0%,100%{opacity:0}40%{opacity:1}70%{opacity:.6}}
+.anim-bolt{position:absolute;width:3px;background:linear-gradient(#fff 0%,#aadfff 60%,transparent 100%);transform-origin:top center;pointer-events:none;z-index:19;animation:boltin .12s ease forwards;filter:drop-shadow(0 0 6px #adf)}
+@keyframes boltin{from{opacity:0;transform:scaleY(0)}to{opacity:1;transform:scaleY(1)}}
+.anim-whale{position:absolute;font-size:5rem;pointer-events:none;z-index:22;filter:drop-shadow(0 6px 14px rgba(0,0,0,.6));transform-origin:bottom center}
+.anim-splash{position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(100,180,255,.8);pointer-events:none;z-index:23;animation:splashfly var(--st,.7s) ease-out forwards}
+@keyframes splashfly{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--sx,20px),var(--sy,-40px)) scale(0);opacity:0}}
+.anim-actor{position:absolute;font-size:2rem;pointer-events:none;z-index:22}
+.anim-sparkle{position:absolute;pointer-events:none;z-index:23;font-size:1.4rem;animation:sparkpop var(--spt,1s) ease forwards;animation-delay:var(--spd,0s);opacity:0}
+@keyframes sparkpop{0%{opacity:0;transform:scale(0) rotate(0)}40%{opacity:1;transform:scale(1.3) rotate(20deg)}80%{opacity:.8;transform:scale(1) rotate(-10deg)}100%{opacity:0;transform:scale(.6) rotate(10deg) translateY(-20px)}}
+.anim-stoway{position:absolute;font-size:2.2rem;pointer-events:none;z-index:22;opacity:0;transition:opacity .4s,transform .6s cubic-bezier(.33,1,.68,1)}
+.anim-fog{position:absolute;border-radius:80px;background:rgba(200,220,240,.18);filter:blur(28px);pointer-events:none;z-index:21}
+.anim-rogue{position:absolute;border-radius:50% 50% 0 0;background:linear-gradient(0deg,#1a4a6b,#3a8bc0);pointer-events:none;z-index:20;transform-origin:bottom center}
+.anim-pirate{position:absolute;font-size:4rem;pointer-events:none;z-index:22;filter:drop-shadow(0 4px 12px rgba(0,0,0,.7))}
+.anim-fish{position:absolute;font-size:1.8rem;pointer-events:none;z-index:22}
+.anim-darken{position:absolute;inset:0;pointer-events:none;z-index:15}
+.anim-ice{position:absolute;font-size:3rem;pointer-events:none;z-index:22;filter:drop-shadow(0 4px 10px rgba(150,220,255,.5))}
+.anim-merchant{position:absolute;font-size:3.5rem;pointer-events:none;z-index:22;filter:drop-shadow(0 4px 12px rgba(0,0,0,.5))}
+.anim-chest{position:absolute;font-size:2.8rem;pointer-events:none;z-index:22;filter:drop-shadow(0 4px 10px rgba(245,200,66,.5));animation:chestbob .8s ease-in-out infinite alternate}
+@keyframes chestbob{from{transform:translateY(0) rotate(-3deg)}to{transform:translateY(-6px) rotate(3deg)}}
+
+/* BUOYANCY PANEL */
+#buoy-panel{background:var(--panel);border-left:1px solid var(--pb);padding:12px;display:flex;flex-direction:column;align-items:center;z-index:10;gap:5px}
+#buoy-panel h2{font-size:.7rem;text-transform:uppercase;letter-spacing:2px;color:var(--dim);margin-bottom:3px}
+#buoy-num{font-size:2rem;font-weight:bold;color:var(--safe);transition:color .5s;line-height:1}
+#buoy-sub{font-size:.67rem;color:var(--dim);margin-bottom:4px}
+#meter-wrap{flex:1;width:52px;position:relative;background:rgba(0,0,0,.45);border:2px solid var(--pb);border-radius:26px;overflow:hidden;margin-bottom:6px}
+#meter-fill{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(0deg,#27ae60,#2ecc71);transition:height 1.6s cubic-bezier(.33,1,.68,1),background .5s;border-radius:0 0 24px 24px}
+#meter-ticks{position:absolute;inset:0;pointer-events:none}
+.tick{position:absolute;left:0;right:0;height:1px;background:rgba(255,255,255,.15)}
+.tick.wtick{background:rgba(243,156,18,.5)}.tick.dtick{background:rgba(231,76,60,.5)}
+#meter-labels{position:absolute;right:calc(100% + 5px);top:0;bottom:0;display:flex;flex-direction:column;justify-content:space-between;font-size:.58rem;color:var(--dim);text-align:right}
+#legend{font-size:.62rem;color:var(--dim);text-align:center;line-height:1.9}
+.ldot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle}
+
+/* STREAK */
+#streak{position:absolute;top:8px;right:8px;z-index:25;background:rgba(245,200,66,.15);border:1px solid var(--gold-dim);border-radius:20px;padding:3px 11px;font-size:.75rem;color:var(--gold);display:none}
+
+/* MODAL */
+#modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:100;align-items:center;justify-content:center;animation:fdin .2s ease}
+#modal-bg.open{display:flex}
+@keyframes fdin{from{opacity:0}to{opacity:1}}
+#modal{background:linear-gradient(145deg,#0d1f35,var(--ocean-deep));border:1px solid var(--pb);border-radius:18px;padding:26px 28px;max-width:510px;width:92%;max-height:88vh;overflow-y:auto;box-shadow:0 0 70px rgba(42,107,154,.25);animation:slideup .3s cubic-bezier(.33,1,.68,1)}
+@keyframes slideup{from{transform:translateY(28px);opacity:0}to{transform:translateY(0);opacity:1}}
+.ev-icon{font-size:2.8rem;text-align:center;display:block;margin-bottom:7px}
+.ev-title{font-size:1.3rem;font-weight:bold;color:var(--gold);text-align:center;margin-bottom:7px}
+.ev-story{color:var(--dim);font-size:.86rem;line-height:1.65;text-align:center;margin-bottom:13px}
+.ev-impact{border-radius:8px;padding:9px 13px;text-align:center;font-size:.88rem;margin-bottom:16px;border:1px solid rgba(231,76,60,.35);background:rgba(231,76,60,.08)}
+.ev-impact.pos{border-color:rgba(46,204,113,.35);background:rgba(46,204,113,.08)}
+.math-box{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:11px;padding:16px;margin-bottom:13px}
+.math-q{font-size:.86rem;color:var(--dim);line-height:1.6;margin-bottom:11px;text-align:center}
+.math-eq{font-size:1.4rem;font-weight:bold;color:var(--gold);text-align:center;letter-spacing:2px;margin-bottom:13px}
+.math-row{display:flex;align-items:center;justify-content:center;gap:8px}
+.math-in{width:86px;padding:8px;text-align:center;font-size:1.1rem;background:rgba(255,255,255,.07);border:2px solid var(--pb);border-radius:8px;color:var(--text);outline:none;transition:border-color .2s;-moz-appearance:textfield}
+.math-in::-webkit-inner-spin-button,.math-in::-webkit-outer-spin-button{-webkit-appearance:none}
+.math-in:focus{border-color:var(--wave)}.math-in.ok{border-color:var(--safe);background:rgba(46,204,113,.1)}.math-in.bad{border-color:var(--danger);background:rgba(231,76,60,.1)}
+.chk-btn{padding:8px 17px;background:linear-gradient(135deg,#1a4a6b,#2a6b9a);border:1px solid var(--wave);border-radius:8px;color:#fff;font-size:.86rem;cursor:pointer;transition:all .2s}
+.chk-btn:hover{background:linear-gradient(135deg,#2a6b9a,#3a8bc0)}
+.math-fb{text-align:center;font-size:.78rem;min-height:17px;margin-top:7px}
+.fb-ok{color:var(--safe)}.fb-bad{color:var(--danger)}.fb-hint{color:var(--warn)}
+#drop-sec{display:none}
+#drop-sec.show{display:block}
+#drop-sec h3{font-size:.88rem;color:var(--warn);text-align:center;margin-bottom:9px}
+#drop-sec p{font-size:.76rem;color:var(--dim);text-align:center;margin-bottom:11px}
+.drop-card{display:flex;align-items:flex-start;gap:9px;padding:9px;margin-bottom:7px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px}
+.dc-icon{font-size:1.35rem;flex-shrink:0;margin-top:2px}
+.dc-info{flex:1}.dc-name{font-size:.82rem;font-weight:600}.dc-gain{font-size:.76rem;color:var(--safe);margin-top:1px}.dc-cons{font-size:.66rem;color:var(--dim);margin-top:1px;line-height:1.3}
+.drop-btn{flex-shrink:0;padding:5px 9px;margin-top:2px;background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.4);border-radius:6px;color:var(--danger);font-size:.73rem;cursor:pointer;transition:all .2s;white-space:nowrap}
+.drop-btn:hover:not(:disabled){background:rgba(231,76,60,.3)}.drop-btn:disabled{opacity:.3;cursor:not-allowed}
+#drop-math{display:none}
+#drop-math.show{display:block}
+#cont-btn{width:100%;padding:12px;margin-top:13px;background:linear-gradient(135deg,#27ae60,#2ecc71);border:none;border-radius:10px;color:#fff;font-size:.92rem;font-weight:600;cursor:pointer;transition:all .2s}
+#cont-btn:hover:not(:disabled){transform:translateY(-1px)}
+#cont-btn:disabled{background:#2c3e50;color:#666;cursor:not-allowed;transform:none}
+
+/* GAME OVER */
+#gameover{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:9px;animation:fdin .4s ease}
+#gameover.open{display:flex}
+#gameover .go-icon{font-size:5rem}
+#gameover h1{font-size:2.5rem;color:var(--danger);text-shadow:0 0 30px rgba(231,76,60,.5)}
+#gameover .go-msg{color:var(--dim);font-size:1rem}
+#gameover .go-score{font-size:1.9rem;color:var(--gold);font-weight:bold;margin:7px 0}
+#gameover .go-stats{color:var(--dim);font-size:.86rem;line-height:1.9}
+.restart-btn{margin-top:16px;padding:12px 40px;background:linear-gradient(135deg,#1a4a6b,#2a6b9a);border:1px solid var(--wave);border-radius:12px;color:#fff;font-size:.95rem;font-weight:600;cursor:pointer;box-shadow:0 4px 20px rgba(42,107,154,.4);transition:all .2s}
+.restart-btn:hover{background:linear-gradient(135deg,#2a6b9a,#3a8bc0);transform:translateY(-2px)}
+
+/* WELCOME */
+#welcome{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:150;display:flex;align-items:center;justify-content:center}
+#wcard{background:linear-gradient(145deg,#0d1f35,var(--ocean-deep));border:1px solid var(--pb);border-radius:18px;padding:34px 36px;max-width:500px;width:92%;text-align:center;box-shadow:0 0 70px rgba(42,107,154,.25)}
+#wcard h2{font-size:1.55rem;color:var(--gold);margin-bottom:9px}
+#wcard p{color:var(--dim);font-size:.86rem;line-height:1.7;margin-bottom:11px}
+.rules{text-align:left;background:rgba(255,255,255,.04);border-radius:10px;padding:13px 16px;margin-bottom:16px;font-size:.81rem;color:var(--dim);line-height:2}
+.rules li{list-style:none}.rules li::before{content:'⚓ ';color:var(--gold)}
+.start-btn{width:100%;padding:13px;background:linear-gradient(135deg,#1a4a6b,#2a6b9a);border:1px solid var(--wave);border-radius:10px;color:#fff;font-size:.95rem;font-weight:600;cursor:pointer;transition:all .2s;box-shadow:0 4px 20px rgba(42,107,154,.4)}
+.start-btn:hover{background:linear-gradient(135deg,#2a6b9a,#3a8bc0);transform:translateY(-2px)}
+
+/* TOAST */
+#toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ocean-mid);border:1px solid var(--pb);border-radius:8px;padding:9px 20px;color:var(--text);font-size:.83rem;z-index:300;transition:transform .3s cubic-bezier(.33,1,.68,1);pointer-events:none}
+#toast.show{transform:translateX(-50%) translateY(0)}
+
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--pb);border-radius:10px}
+</style>
+</head>
+<body>
+<div id="stars"></div>
+
+<!-- WELCOME -->
+<div id="welcome">
+  <div id="wcard">
+    <div style="font-size:3rem;margin-bottom:7px">🚢</div>
+    <h2>Captain's Cargo</h2>
+    <p>Steer your ship through dangerous waters! Use <strong style="color:var(--gold)">negative number arithmetic</strong> to handle every disaster.</p>
+    <ul class="rules">
+      <li>⬆️ <b>W / ↑</b> — steer up &nbsp;&nbsp; ⬇️ <b>S / ↓</b> — steer down</li>
+      <li>⚡ <b>D / →</b> — speed up &nbsp;&nbsp; 🐢 <b>A / ←</b> — slow down</li>
+      <li>Dodge hazards flying in from the right</li>
+      <li>Some events (duck, whale…) are <b>unavoidable</b></li>
+      <li>When hit: <b>solve the math</b> to handle the damage</li>
+      <li>Buoyancy hits <b>–50</b> → the ship sinks!</li>
+    </ul>
+    <button class="start-btn" onclick="closeWelcome()">⚓ Begin Voyage</button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div id="hdr">
+  <h1>⚓ Captain's Cargo</h1>
+  <div class="pills">
+    <div class="pill">Dist: <b id="ph-dist">0</b> km</div>
+    <div class="pill">Score: <b id="ph-score">0</b></div>
+    <div class="pill">Accuracy: <b id="ph-acc">–</b></div>
+    <div class="pill">Buoyancy: <b id="ph-buoy" style="color:var(--safe)">0</b></div>
+  </div>
+</div>
+<div id="streak">🔥 <span id="streak-n">0</span> streak!</div>
+
+<div id="layout">
+  <!-- CARGO -->
+  <aside id="cargo-panel">
+    <h2>⚓ Cargo Hold</h2>
+    <div id="cargo-list"></div>
+    <div id="cargo-total"><div class="lbl">Buoyancy impact</div><div class="val" id="ctval">0</div></div>
+  </aside>
+
+  <!-- GAME VIEW -->
+  <div id="game-view">
+    <!-- horizon clouds -->
+    <div class="hcloud" style="width:170px;height:45px;left:4%;top:40%"></div>
+    <div class="hcloud" style="width:110px;height:32px;left:22%;top:43%"></div>
+    <div class="hcloud" style="width:185px;height:50px;right:7%;top:39%"></div>
+    <div class="hcloud" style="width:85px;height:26px;right:24%;top:44%"></div>
+
+    <div id="water"><div class="wl"></div><div class="wl"></div><div class="wl"></div></div>
+
+    <div id="ship-wrap">
+      <span id="ship-emoji">🚢</span>
+      <span id="ship-reflect">🚢</span>
+    </div>
+
+    <div id="anim-stage"></div>
+
+    <div id="dist-hud">Distance: <b id="dh-dist">0</b> km &nbsp;|&nbsp; Speed: <b id="dh-spd">1.0</b>×</div>
+    <div id="ctrl-hint">⬆️ W/↑ steer up &nbsp;·&nbsp; ⬇️ S/↓ steer down &nbsp;·&nbsp; ⚡ D/→ faster &nbsp;·&nbsp; 🐢 A/← slower</div>
+    <div id="speed-hud">Slow <div id="speed-track"><div id="speed-bar"></div></div> Fast</div>
+    <div id="sail-wrap"><button id="sail-btn" onclick="startGame()">⛵ Set Sail</button></div>
+  </div>
+
+  <!-- BUOYANCY -->
+  <aside id="buoy-panel">
+    <h2>Buoyancy</h2>
+    <div id="buoy-num">0</div>
+    <div id="buoy-sub">/ –50 sinks</div>
+    <div style="position:relative;flex:1;display:flex;justify-content:center;width:100%">
+      <div id="meter-labels"><span>0</span><span>–10</span><span>–20</span><span>–30</span><span>–40</span><span>–50</span></div>
+      <div id="meter-wrap"><div id="meter-fill"></div><div id="meter-ticks"></div></div>
+    </div>
+    <div id="legend">
+      <div><span class="ldot" style="background:var(--safe)"></span>Safe</div>
+      <div><span class="ldot" style="background:var(--warn)"></span>Danger</div>
+      <div><span class="ldot" style="background:var(--danger)"></span>Critical</div>
+    </div>
+  </aside>
+</div>
+
+<!-- MODAL -->
+<div id="modal-bg">
+  <div id="modal">
+    <span class="ev-icon" id="ev-icon"></span>
+    <div class="ev-title" id="ev-title"></div>
+    <div class="ev-story" id="ev-story"></div>
+    <div class="ev-impact" id="ev-impact"></div>
+    <div class="math-box">
+      <div class="math-q" id="math-q"></div>
+      <div class="math-eq" id="math-eq"></div>
+      <div class="math-row">
+        <input type="number" class="math-in" id="math-in" placeholder="?">
+        <button class="chk-btn" onclick="checkMain()">Check ✓</button>
+      </div>
+      <div class="math-fb" id="math-fb"></div>
+    </div>
+    <div id="drop-sec">
+      <h3 id="drop-hd">⚠️ Ship in danger! Drop cargo to stay afloat.</h3>
+      <p id="drop-sub">Jettison cargo — each drop requires solving the math!</p>
+      <div id="drop-list"></div>
+      <div class="math-box" id="drop-math">
+        <div class="math-q" id="dm-q"></div>
+        <div class="math-eq" id="dm-eq"></div>
+        <div class="math-row">
+          <input type="number" class="math-in" id="dm-in" placeholder="?">
+          <button class="chk-btn" onclick="checkDrop()">Check ✓</button>
+        </div>
+        <div class="math-fb" id="dm-fb"></div>
+      </div>
+    </div>
+    <button id="cont-btn" disabled onclick="resumeGame()">Resume Voyage ⚓</button>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div id="gameover">
+  <div class="go-icon">🌊</div>
+  <h1>Ship Sank!</h1>
+  <div class="go-msg">The sea has claimed your vessel…</div>
+  <div class="go-score" id="go-score"></div>
+  <div class="go-stats" id="go-stats"></div>
+  <button class="restart-btn" onclick="restartGame()">⚓ Try Again</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════════ */
+const SINK=-50,WARN=-35,CRIT=-45;
+const SHIP_X_PCT=0.22;   // ship at 22% from left
+const SHIP_MIN_Y=-170;   // max upward offset from waterline
+const SHIP_MAX_Y=32;     // max downward offset
+const SHIP_HW=28;        // ship hitbox half-width
+const SHIP_HH=20;        // ship hitbox half-height
+
+/* ═══════════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════════ */
+const CARGO_DB=[
+  {id:'food',   name:'Food Supplies',     icon:'🍞',b:-6, consequence:'Crew will go hungry.'},
+  {id:'water',  name:'Water Barrels',     icon:'🪣',b:-10,consequence:'Risk of dehydration.'},
+  {id:'medical',name:'Medical Kit',       icon:'🩺',b:-4, consequence:'Cannot treat injuries.'},
+  {id:'charts', name:'Navigation Charts', icon:'🗺️',b:-5, consequence:'Navigation unreliable.'},
+  {id:'rope',   name:'Spare Rope',        icon:'🪢',b:-3, consequence:'Minor inconvenience.'},
+  {id:'sails',  name:'Spare Sails',       icon:'⛵',b:-9, consequence:'Cannot repair sails.'},
+  {id:'tools',  name:'Repair Tools',      icon:'🔧',b:-7, consequence:'Hull cannot be fixed.'},
+  {id:'gold',   name:'Gold Chest',        icon:'💰',b:-14,consequence:'Lose the treasure.'},
+];
+
+// Avoidable scrolling hazards
+const HAZARD_DEFS=[
+  {id:'wave',   label:'Rogue Wave',   emoji:'🌊',fs:'3.8rem',w:90, h:70, hw:38,hh:28,speed:215,b:-22,color:'rgba(26,74,107,.75)',spawnY:'low',
+   story:'A rogue wave crashes over the hull!'},
+  {id:'storm',  label:'Storm Cloud',  emoji:'⛈️',fs:'4.5rem',w:130,h:105,hw:52,hh:40,speed:125,b:-20,color:'rgba(18,18,48,.82)',spawnY:'high',
+   story:'You sailed straight into a violent storm!'},
+  {id:'ice',    label:'Ice Floe',     emoji:'🧊',fs:'3.2rem',w:70, h:70, hw:30,hh:28,speed:162,b:-9, color:'rgba(140,210,255,.35)',spawnY:'any',
+   story:'The ship crashes into a massive ice floe!'},
+  {id:'cannon', label:'Cannonball',   emoji:'💣',fs:'2rem',  w:42, h:42, hw:18,hh:18,speed:355,b:-12,color:'rgba(70,35,10,.65)',spawnY:'any',
+   story:'A pirate cannonball smashes through the deck!'},
+  {id:'debris', label:'Debris Field', emoji:'🪵',fs:'2.8rem',w:72, h:44, hw:30,hh:18,speed:148,b:-7, color:'rgba(90,55,18,.55)',spawnY:'low',
+   story:'The ship plows through floating wreckage!'},
+];
+
+// Scripted unavoidable events (trigger on timer)
+const SCRIPTED_EVENTS=[
+  {id:'duck',    name:'Wounded Duck',      icon:'🦆',b:-4,  positive:false,interval:28,
+   story:'A tiny wounded duck crash-lands on deck. The crew insists on caring for it!',anim:'duck'},
+  {id:'whale',   name:'Whale Encounter',   icon:'🐋',b:-12, positive:false,interval:40,
+   story:'A massive whale surfaces right beneath the hull! The ship takes on water.',anim:'whale'},
+  {id:'stowaway',name:'Stowaway Found!',   icon:'🧍',b:-10, positive:false,interval:55,
+   story:'A stowaway was hiding in the hold, eating your rations the whole time!',anim:'stowaway'},
+  {id:'fishing', name:'Excellent Fishing', icon:'🐟',b:+8,  positive:true, interval:32,
+   story:'Incredible fishing! Fresh catch means you can offload preserved food.',anim:'fishing'},
+  {id:'spring',  name:'Fresh Water Spring',icon:'💧',b:+10, positive:true, interval:60,
+   story:'A pristine island spring! You swap heavy salt water for light fresh water.',anim:'spring'},
+  {id:'merchant',name:'Merchant Barter',   icon:'🏪',b:+7,  positive:true, interval:50,
+   story:'A passing merchant trades your heavy goods for lighter wares!',anim:'merchant'},
+];
+
+/* ═══════════════════════════════════════════════
+   GAME STATE
+═══════════════════════════════════════════════ */
+let G={
+  buoyancy:0,cargo:[],
+  playing:false,paused:false,loopId:null,lastTs:0,
+  shipY:0,shipVY:0,
+  hazards:[],hSeq:0,spawnTimer:2.5,
+  scriptedTimers:{},
+  gameSpeed:1.0,
+  dist:0,score:0,attempts:0,correct:0,streak:0,
+  invincible:0,
+  pendingEv:null,mainSolved:false,
+  keys:{},
+  gameW:0,gameH:0,
+};
+let dropPending=null;
+
+/* ═══════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════ */
+function initGame(){
+  G.cargo=['food','water','medical','charts','rope']
+    .map(id=>({...CARGO_DB.find(c=>c.id===id)}));
+  G.buoyancy=G.cargo.reduce((s,c)=>s+c.b,0);
+  buildStars();buildMeterTicks();
+  cacheGameSize();
+  renderCargo();renderBuoyancy();renderShipPos();
+  // Init scripted timers
+  SCRIPTED_EVENTS.forEach(e=>{
+    G.scriptedTimers[e.id]=e.interval*0.5+Math.random()*e.interval*0.5;
+  });
+}
+
+function cacheGameSize(){
+  const gv=document.getElementById('game-view');
+  G.gameW=gv.offsetWidth;
+  G.gameH=gv.offsetHeight;
+}
+
+function closeWelcome(){
+  document.getElementById('welcome').style.display='none';
+}
+
+function buildStars(){
+  const el=document.getElementById('stars');el.innerHTML='';
+  for(let i=0;i<90;i++){
+    const s=document.createElement('div');s.className='star';
+    const sz=Math.random()*2+.6;
+    s.style.cssText=`width:${sz}px;height:${sz}px;top:${Math.random()*52}%;left:${Math.random()*100}%;--dur:${2+Math.random()*3}s;--dly:${Math.random()*4}s;`;
+    el.appendChild(s);
+  }
+}
+
+function buildMeterTicks(){
+  const t=document.getElementById('meter-ticks');
+  for(let i=1;i<=4;i++){
+    const d=document.createElement('div');
+    d.className='tick'+(i===3?' wtick':i===4?' dtick':'');
+    d.style.bottom=(i*20)+'%';t.appendChild(d);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   INPUT
+═══════════════════════════════════════════════ */
+window.addEventListener('keydown',e=>{
+  G.keys[e.key]=true;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();
+});
+window.addEventListener('keyup',e=>{G.keys[e.key]=false;});
+window.addEventListener('resize',()=>{cacheGameSize();renderShipPos();});
+
+/* ═══════════════════════════════════════════════
+   GAME LOOP
+═══════════════════════════════════════════════ */
+function startGame(){
+  document.getElementById('sail-btn').disabled=true;
+  document.getElementById('sail-btn').textContent='⚓ Sailing…';
+  // Fade out ctrl hint after 5s
+  setTimeout(()=>{
+    const h=document.getElementById('ctrl-hint');
+    h.style.opacity='0';
+    setTimeout(()=>h.style.display='none',1500);
+  },5000);
+  G.playing=true;
+  document.getElementById('ship-emoji').style.animation='none';
+  G.lastTs=performance.now();
+  scheduleLoop();
+}
+
+// rAF is throttled when document is hidden (preview iframe). Fall back to setTimeout.
+function scheduleLoop(){
+  if(document.hidden){
+    G.loopId=setTimeout(()=>gameLoop(performance.now()),16);
+  } else {
+    G.loopId=requestAnimationFrame(gameLoop);
+  }
+}
+
+function gameLoop(ts){
+  const dt=Math.min((ts-G.lastTs)/1000,.05);
+  G.lastTs=ts;
+
+  if(G.playing && !G.paused){
+    const up   =G.keys['ArrowUp']  ||G.keys['w']||G.keys['W'];
+    const down =G.keys['ArrowDown']||G.keys['s']||G.keys['S'];
+    const right=G.keys['ArrowRight']||G.keys['d']||G.keys['D'];
+    const left =G.keys['ArrowLeft'] ||G.keys['a']||G.keys['A'];
+
+    // Vertical ship movement
+    const accel=780;
+    if(up)   G.shipVY-=accel*dt;
+    if(down) G.shipVY+=accel*dt;
+    G.shipVY*=Math.pow(.04,dt); // friction
+    G.shipY=clamp(G.shipY+G.shipVY*dt,SHIP_MIN_Y,SHIP_MAX_Y);
+
+    // Speed control
+    if(right)     G.gameSpeed=Math.min(2.2,G.gameSpeed+dt*.4);
+    else if(left) G.gameSpeed=Math.max(0.45,G.gameSpeed-dt*.4);
+    else          G.gameSpeed+=(1-G.gameSpeed)*dt*1.8;
+
+    // Invincibility
+    if(G.invincible>0)G.invincible-=dt;
+
+    // Distance & score
+    G.dist+=G.gameSpeed*28*dt;
+    G.score+=G.gameSpeed*dt*1.5;
+    updateStats();
+
+    // Hazards move
+    G.hazards.forEach(h=>{h.x-=h.def.speed*G.gameSpeed*dt;});
+
+    // Remove off-screen, check near-miss
+    const shipCX=G.gameW*SHIP_X_PCT;
+    const wy=G.gameH*0.55;
+    const shipCY=wy+G.shipY;
+
+    G.hazards=G.hazards.filter(h=>{
+      if(h.x<-h.def.w-60){
+        removeHazardEl(h);return false;
+      }
+      // Near-miss
+      if(!h.passedShip && h.x+h.def.w/2<shipCX){
+        h.passedShip=true;
+        const dy=Math.abs(h.y-shipCY);
+        const minDist=h.def.hh+SHIP_HH;
+        if(dy>=minDist && dy<minDist*2.2){
+          G.score+=8;
+          spawnScorePop(shipCX-20,shipCY-50,'+8 Close call!','var(--warn)');
+          updateStats();
+        }
+      }
+      return true;
+    });
+
+    // Spawn hazards
+    G.spawnTimer-=dt;
+    if(G.spawnTimer<=0&&G.hazards.length<4){
+      spawnHazard();
+      const diff=Math.min(1,G.dist/900);
+      G.spawnTimer=lerp(3.8,1.9,diff)+Math.random()*1.4;
+    }
+
+    // Scripted events
+    SCRIPTED_EVENTS.forEach(ev=>{
+      G.scriptedTimers[ev.id]-=dt;
+      if(G.scriptedTimers[ev.id]<=0){
+        G.scriptedTimers[ev.id]=ev.interval+Math.random()*ev.interval*0.4;
+        triggerScripted(ev);
+      }
+    });
+
+    // Collision detection
+    if(G.invincible<=0){
+      for(const h of G.hazards){
+        const dx=Math.abs(h.x-shipCX);
+        const dy=Math.abs(h.y-shipCY);
+        if(dx<h.def.hw+SHIP_HW && dy<h.def.hh+SHIP_HH){
+          handleHazardHit(h);break;
+        }
+      }
+    }
+  }
+
+  renderShipPos();
+  renderHazards();
+  renderSpeedHUD();
+
+  scheduleLoop();
+}
+
+/* ═══════════════════════════════════════════════
+   HAZARD SPAWNING
+═══════════════════════════════════════════════ */
+function spawnHazard(){
+  const wy=G.gameH*0.55;
+  // Weight toward harder hazards as difficulty increases
+  const diff=Math.min(1,G.dist/900);
+  const pool=diff>0.5
+    ? HAZARD_DEFS
+    : HAZARD_DEFS.filter(d=>d.id!=='cannon'); // no cannons early
+  const def=pool[Math.floor(Math.random()*pool.length)];
+
+  let y;
+  if(def.spawnY==='low')       y=wy+rand(-22,28);
+  else if(def.spawnY==='high') y=wy-145+rand(0,35);
+  else                         y=wy+rand(SHIP_MIN_Y+30,SHIP_MAX_Y-5);
+
+  const h={id:G.hSeq++,def,x:G.gameW+def.w/2+10,y,passedShip:false};
+  G.hazards.push(h);
+  createHazardEl(h);
+}
+
+function createHazardEl(h){
+  const gv=document.getElementById('game-view');
+
+  // Hazard div
+  const el=document.createElement('div');
+  el.id='h'+h.id; el.className='hazard';
+  el.style.cssText=`width:${h.def.w}px;height:${h.def.h}px;font-size:${h.def.fs};background:${h.def.color};border-radius:50%;`;
+  el.textContent=h.def.emoji;
+  gv.appendChild(el);
+
+  // Warning arrow (visible when off-screen right)
+  const wa=document.createElement('div');
+  wa.id='wa'+h.id; wa.className='warn-arrow';
+  wa.innerHTML=h.def.emoji+'<span style="font-size:.8rem;margin-left:2px">›</span>';
+  wa.style.top=(h.y-14)+'px';
+  gv.appendChild(wa);
+}
+
+function removeHazardEl(h){
+  document.getElementById('h'+h.id)?.remove();
+  document.getElementById('wa'+h.id)?.remove();
+}
+
+/* ═══════════════════════════════════════════════
+   RENDERING
+═══════════════════════════════════════════════ */
+function renderShipPos(){
+  const wy=G.gameH*0.55;
+  const wrap=document.getElementById('ship-wrap');
+  const emoji=document.getElementById('ship-emoji');
+  const tilt=clamp(-G.shipVY*0.022,-14,14);
+  // Ship emoji center (hitbox point) should sit at: wy + G.shipY from top of game-view.
+  // Emoji is ~96px tall (6rem), so top of emoji = center - 48.
+  wrap.style.top=(wy+G.shipY-48)+'px';
+  wrap.style.bottom='';
+  wrap.style.transform='translateX(-50%)';
+  emoji.style.transform=`rotate(${tilt}deg)`;
+
+  // Color based on buoyancy state
+  if(G.buoyancy<=CRIT){
+    emoji.style.filter='drop-shadow(0 4px 20px rgba(231,76,60,.9))';
+    wrap.classList.add('ship-crit');
+  } else {
+    wrap.classList.remove('ship-crit');
+    if(G.invincible>0&&Math.floor(G.invincible*10)%2===0){
+      emoji.style.filter='drop-shadow(0 0 20px rgba(255,100,100,.8)) brightness(1.8)';
+    } else {
+      emoji.style.filter='drop-shadow(0 8px 16px rgba(0,0,0,.7))';
+    }
+  }
+}
+
+function renderHazards(){
+  G.hazards.forEach(h=>{
+    const el=document.getElementById('h'+h.id);
+    if(el){
+      el.style.transform=`translate(${h.x-h.def.w/2}px,${h.y-h.def.h/2}px)`;
+      el.style.left='0'; el.style.top='0';
+    }
+    const wa=document.getElementById('wa'+h.id);
+    if(wa) wa.style.display=h.x>G.gameW?'flex':'none';
+  });
+}
+
+function renderSpeedHUD(){
+  const pct=((G.gameSpeed-0.45)/(2.2-0.45))*100;
+  document.getElementById('speed-bar').style.width=pct+'%';
+  document.getElementById('dh-dist').textContent=Math.floor(G.dist);
+  document.getElementById('dh-spd').textContent=G.gameSpeed.toFixed(1);
+}
+
+/* ═══════════════════════════════════════════════
+   HIT HANDLING
+═══════════════════════════════════════════════ */
+function handleHazardHit(h){
+  G.invincible=2.5;
+  // Remove hazard
+  removeHazardEl(h);
+  G.hazards=G.hazards.filter(x=>x.id!==h.id);
+
+  // Ship shake
+  const wrap=document.getElementById('ship-wrap');
+  wrap.classList.add('ship-hit');
+  setTimeout(()=>wrap.classList.remove('ship-hit'),800);
+
+  // Build event-like object for modal
+  const ev={
+    id:h.def.id,name:h.def.label,icon:h.def.emoji,
+    b:h.def.b,positive:false,story:h.def.story,
+  };
+  G.pendingEv=ev;
+  G.mainSolved=false;
+  G.paused=true;
+
+  // Brief hit flash then modal
+  setTimeout(()=>{
+    document.getElementById('anim-stage').innerHTML='';
+    openModal(ev);
+  },400);
+}
+
+function triggerScripted(ev){
+  G.paused=true;
+  G.pendingEv={...ev};
+  G.mainSolved=false;
+  // Play animation then open modal
+  const ANIM_MAP={duck:animDuck,whale:animWhale,stowaway:animStowaway,
+                  fishing:animFishing,spring:animSpring,merchant:animMerchant};
+  const fn=ANIM_MAP[ev.anim];
+  const stage=document.getElementById('anim-stage');
+  stage.innerHTML='';
+  if(fn) fn(stage,()=>openModal(G.pendingEv));
+  else   openModal(G.pendingEv);
+}
+
+/* ═══════════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════════ */
+function openModal(ev){
+  document.getElementById('ev-icon').textContent=ev.icon;
+  document.getElementById('ev-title').textContent=ev.name;
+  document.getElementById('ev-story').textContent=ev.story;
+  const imp=document.getElementById('ev-impact');
+  const kg=Math.abs(ev.b)*10;
+  imp.className='ev-impact'+(ev.positive?' pos':'');
+  imp.innerHTML=ev.positive
+    ?`⬆️ <b>+${ev.b} buoyancy</b> &nbsp;|&nbsp; Lightens ship by <b>${kg} kg</b>`
+    :`⬇️ <b>${ev.b} buoyancy</b> &nbsp;|&nbsp; Adds <b>${kg} kg</b> weight`;
+
+  const cur=G.buoyancy,d=ev.b,pos=d>0;
+  document.getElementById('math-q').textContent=pos
+    ?`Your buoyancy is ${cur}. This event adds +${d}. What is your new buoyancy?`
+    :`Your buoyancy is ${cur}. This event adds ${d}. What is your new buoyancy?`;
+  document.getElementById('math-eq').textContent=pos?`${cur} + ${d} = ?`:`${cur} + (${d}) = ?`;
+
+  resetIn('math-in','math-fb');
+  document.getElementById('drop-sec').className='';
+  document.getElementById('drop-sec').style.display='none';
+  document.getElementById('drop-math').className='math-box';
+  document.getElementById('drop-math').style.display='none';
+  document.getElementById('cont-btn').disabled=true;
+  document.getElementById('cont-btn').textContent='Resume Voyage ⚓';
+  document.getElementById('modal-bg').className='open';
+  requestAnimationFrame(()=>document.getElementById('math-in').focus());
+  document.getElementById('math-in').onkeydown=e=>{if(e.key==='Enter')checkMain();};
+}
+
+function checkMain(){
+  const ev=G.pendingEv;
+  const correct=G.buoyancy+ev.b;
+  const val=parseInt(document.getElementById('math-in').value,10);
+  G.attempts++;updateStats();
+  if(isNaN(val)){showFb('math-fb','⚠️ Please enter a number.','fb-hint');return;}
+  if(val===correct){
+    G.correct++;G.streak++;
+    G.score+=10+(G.streak>=3?G.streak*2:0);
+    updateStats();showStreak();
+    document.getElementById('math-in').className='math-in ok';
+    const p=ev.b>0;
+    showFb('math-fb',p?`✅ Correct! ${G.buoyancy} + ${ev.b} = ${correct}`:`✅ Correct! ${G.buoyancy} + (${ev.b}) = ${correct}`,'fb-ok');
+    G.buoyancy=correct;G.mainSolved=true;
+    renderBuoyancy();
+    setTimeout(afterMainSolved,900);
+  } else {
+    G.streak=0;document.getElementById('streak').style.display='none';
+    document.getElementById('math-in').className='math-in bad';
+    const diff=val-correct;
+    let hint=Math.abs(diff)<=2?`❌ So close! Off by ${Math.abs(diff)}.`
+      :val===Math.abs(correct)?`❌ Mind the sign! Answer is ${correct>0?'positive':'negative'}.`
+      :`❌ Not quite. ${G.buoyancy} ${ev.b>=0?'+':''} ${ev.b} = ? Try again!`;
+    showFb('math-fb',hint,'fb-bad');
+    setTimeout(()=>{document.getElementById('math-in').className='math-in';document.getElementById('math-in').focus();},1800);
+  }
+}
+
+function afterMainSolved(){
+  if(G.buoyancy<=SINK){document.getElementById('modal-bg').className='';gameOver();return;}
+  if(G.buoyancy<=WARN&&G.cargo.length>0)showDropSection();
+  else document.getElementById('cont-btn').disabled=false;
+}
+
+/* ── DROP SECTION ── */
+function showDropSection(){
+  const sec=document.getElementById('drop-sec');
+  const hd=document.getElementById('drop-hd');
+  sec.className='show';sec.style.display='block';
+  if(G.buoyancy<=CRIT){
+    hd.textContent='🚨 CRITICAL! Drop cargo or the ship sinks!';
+    hd.style.color='var(--danger)';
+    document.getElementById('cont-btn').disabled=true;
+    document.getElementById('cont-btn').textContent='Drop cargo first!';
+  } else {
+    hd.textContent='⚠️ Danger! Consider dropping cargo.';
+    hd.style.color='var(--warn)';
+    document.getElementById('cont-btn').disabled=false;
+  }
+  buildDropList();
+}
+
+function buildDropList(){
+  const list=document.getElementById('drop-list');
+  list.innerHTML='';
+  if(!G.cargo.length){
+    list.innerHTML='<p style="text-align:center;color:var(--dim);font-size:.8rem">Hold is empty!</p>';
+    document.getElementById('cont-btn').disabled=false;return;
+  }
+  G.cargo.forEach(item=>{
+    const c=document.createElement('div');c.className='drop-card';c.id='dc-'+item.id;
+    c.innerHTML=`<span class="dc-icon">${item.icon}</span>
+      <div class="dc-info">
+        <div class="dc-name">${item.name}</div>
+        <div class="dc-gain">Removes from ship → +${Math.abs(item.b)} buoyancy</div>
+        <div class="dc-cons">⚠️ ${item.consequence}</div>
+      </div>
+      <button class="drop-btn" id="dbtn-${item.id}" onclick="initiateDrop('${item.id}')">Drop</button>`;
+    list.appendChild(c);
+  });
+}
+
+function initiateDrop(id){
+  const item=G.cargo.find(c=>c.id===id);if(!item)return;
+  dropPending=id;
+  document.querySelectorAll('.drop-btn').forEach(b=>b.disabled=true);
+  const gain=Math.abs(item.b);
+  document.getElementById('dm-q').textContent=`Dropping ${item.name} removes ${gain*10}kg → +${gain} buoyancy. You're at ${G.buoyancy}. New buoyancy?`;
+  document.getElementById('dm-eq').textContent=`${G.buoyancy} + ${gain} = ?`;
+  resetIn('dm-in','dm-fb');
+  const dm=document.getElementById('drop-math');dm.className='math-box show';dm.style.display='block';
+  requestAnimationFrame(()=>document.getElementById('dm-in').focus());
+  document.getElementById('dm-in').onkeydown=e=>{if(e.key==='Enter')checkDrop();};
+}
+
+function checkDrop(){
+  const item=G.cargo.find(c=>c.id===dropPending);if(!item)return;
+  const gain=Math.abs(item.b),correct=G.buoyancy+gain;
+  const val=parseInt(document.getElementById('dm-in').value,10);
+  G.attempts++;updateStats();
+  if(isNaN(val)){showFb('dm-fb','⚠️ Please enter a number.','fb-hint');return;}
+  if(val===correct){
+    G.correct++;G.streak++;
+    G.score+=8+(G.streak>=3?G.streak*2:0);
+    updateStats();showStreak();
+    document.getElementById('dm-in').className='math-in ok';
+    showFb('dm-fb',`✅ Correct! ${G.buoyancy} + ${gain} = ${correct}`,'fb-ok');
+    G.buoyancy=correct;
+    G.cargo=G.cargo.filter(c=>c.id!==dropPending);
+    dropPending=null;
+    renderBuoyancy();renderCargo();
+    toast(item.icon+' '+item.name+' dropped overboard!');
+    setTimeout(()=>{
+      document.getElementById('drop-math').style.display='none';
+      document.getElementById('drop-math').className='math-box';
+      buildDropList();
+      if(G.buoyancy<=SINK){document.getElementById('modal-bg').className='';gameOver();return;}
+      if(G.buoyancy>CRIT||!G.cargo.length){
+        document.getElementById('cont-btn').disabled=false;
+        document.getElementById('cont-btn').textContent='Resume Voyage ⚓';
+      }
+    },900);
+  } else {
+    G.streak=0;
+    document.getElementById('dm-in').className='math-in bad';
+    showFb('dm-fb',Math.abs(val-correct)<=1?`❌ Off by ${Math.abs(val-correct)}!`:`❌ ${G.buoyancy} + ${gain} — both positive here. Try again!`,'fb-bad');
+    setTimeout(()=>{document.getElementById('dm-in').className='math-in';document.getElementById('dm-in').focus();},1800);
+  }
+}
+
+function resumeGame(){
+  document.getElementById('modal-bg').className='';
+  document.getElementById('anim-stage').innerHTML='';
+  G.paused=false;
+  G.invincible=Math.max(G.invincible,1.5); // brief grace period
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER HELPERS
+═══════════════════════════════════════════════ */
+function renderCargo(){
+  const list=document.getElementById('cargo-list');list.innerHTML='';
+  if(!G.cargo.length){
+    list.innerHTML='<p style="color:var(--dim);font-size:.78rem;text-align:center;padding:14px 0">Hold is empty!</p>';
+    document.getElementById('ctval').textContent='0';return;
+  }
+  G.cargo.forEach(item=>{
+    const el=document.createElement('div');el.className='ci';el.id='ci-'+item.id;
+    el.innerHTML=`<span class="ci-icon">${item.icon}</span>
+      <div><div class="ci-name">${item.name}</div>
+      <div class="ci-b">${item.b} buoyancy (${Math.abs(item.b*10)}kg)</div>
+      <div class="ci-c">${item.consequence}</div></div>`;
+    list.appendChild(el);
+  });
+  document.getElementById('ctval').textContent=G.cargo.reduce((s,c)=>s+c.b,0);
+}
+
+function renderBuoyancy(){
+  const b=G.buoyancy;
+  const num=document.getElementById('buoy-num');
+  const fil=document.getElementById('meter-fill');
+  const phb=document.getElementById('ph-buoy');
+  num.textContent=b; phb.textContent=b;
+  let col,grad;
+  if(b>=WARN){col='var(--safe)';grad='linear-gradient(0deg,#27ae60,#2ecc71)';}
+  else if(b>=CRIT){col='var(--warn)';grad='linear-gradient(0deg,#e67e22,var(--warn))';}
+  else{col='var(--danger)';grad='linear-gradient(0deg,#c0392b,var(--danger))';}
+  num.style.color=col;phb.style.color=col;fil.style.background=grad;
+  const pct=Math.max(0,Math.min(100,((b-SINK)/(-SINK))*100));
+  fil.style.height=pct+'%';
+}
+
+function updateStats(){
+  document.getElementById('ph-dist').textContent=Math.floor(G.dist);
+  document.getElementById('ph-score').textContent=Math.floor(G.score);
+  document.getElementById('ph-acc').textContent=G.attempts>0?Math.round((G.correct/G.attempts)*100)+'%':'–';
+}
+
+function showStreak(){
+  const el=document.getElementById('streak');
+  if(G.streak>=3){el.style.display='block';document.getElementById('streak-n').textContent=G.streak;}
+  else el.style.display='none';
+}
+
+function spawnScorePop(x,y,text,color){
+  const gv=document.getElementById('game-view');
+  const el=document.createElement('div');el.className='score-pop';
+  el.style.cssText=`left:${x}px;top:${y}px;color:${color};font-size:1rem;`;
+  el.textContent=text;gv.appendChild(el);
+  setTimeout(()=>el.remove(),1200);
+}
+
+/* ═══════════════════════════════════════════════
+   GAME OVER / RESTART
+═══════════════════════════════════════════════ */
+function gameOver(){
+  G.playing=false;G.paused=false;
+  if(G.loopId){cancelAnimationFrame(G.loopId);clearTimeout(G.loopId);G.loopId=null;}
+  const acc=G.attempts>0?Math.round((G.correct/G.attempts)*100):0;
+  document.getElementById('go-score').textContent='Score: '+Math.floor(G.score);
+  document.getElementById('go-stats').innerHTML=
+    `Distance sailed: ${Math.floor(G.dist)} km<br>Math accuracy: ${acc}%`;
+  document.getElementById('gameover').className='open';
+}
+
+function restartGame(){
+  // Clear hazards from DOM
+  G.hazards.forEach(h=>removeHazardEl(h));
+  document.getElementById('anim-stage').innerHTML='';
+
+  G={buoyancy:0,cargo:[],playing:false,paused:false,loopId:null,lastTs:0,
+     shipY:0,shipVY:0,hazards:[],hSeq:0,spawnTimer:2.5,scriptedTimers:{},
+     gameSpeed:1.0,dist:0,score:0,attempts:0,correct:0,streak:0,
+     invincible:0,pendingEv:null,mainSolved:false,keys:{},
+     gameW:G.gameW,gameH:G.gameH};
+  dropPending=null;
+
+  document.getElementById('gameover').className='';
+  document.getElementById('modal-bg').className='';
+  document.getElementById('streak').style.display='none';
+  document.getElementById('sail-btn').disabled=false;
+  document.getElementById('sail-btn').textContent='⛵ Set Sail';
+  document.getElementById('ctrl-hint').style.display='block';
+  document.getElementById('ctrl-hint').style.opacity='1';
+  document.getElementById('ship-emoji').style.animation='';
+  document.getElementById('ship-emoji').style.transform='';
+  updateStats();
+  initGame();
+}
+
+/* ═══════════════════════════════════════════════
+   ANIMATIONS (scripted events)
+═══════════════════════════════════════════════ */
+function stageSize(){return{w:G.gameW,h:G.gameH};}
+function waterY(){return Math.round(G.gameH*0.55);}
+function shipXY(){return{x:G.gameW*SHIP_X_PCT,y:waterY()+G.shipY};}
+function mkCap(stage,text){const el=document.createElement('div');el.className='ev-caption';el.textContent=text;stage.appendChild(el);return el;}
+function mkEl(stage,cls,css){const el=document.createElement('div');el.className=cls;Object.assign(el.style,css);stage.appendChild(el);return el;}
+function splashes(stage,cx,cy,n=8){for(let i=0;i<n;i++){const a=(Math.PI*2/n)*i-Math.PI/2,d=22+Math.random()*28;const el=document.createElement('div');el.className='anim-splash';el.style.cssText=`left:${cx-3}px;top:${cy-3}px;--sx:${Math.cos(a)*d}px;--sy:${Math.sin(a)*d-18}px;--st:${.45+Math.random()*.3}s;animation-delay:${Math.random()*.12}s;`;stage.appendChild(el);}}
+function clearAfter(stage,ms){setTimeout(()=>{stage.innerHTML='';},ms);}
+
+function animDuck(stage,done){
+  const{w}=stageSize();const wy=waterY();const{x:sx,y:sy}=shipXY();
+  mkCap(stage,'🦆 Something is falling from the sky…');
+  const duck=mkEl(stage,'anim-duck',{left:(w*.8)+'px',top:(wy-300)+'px',opacity:'0',transition:'none',fontSize:'3.2rem'});
+  duck.textContent='🦆';
+  setTimeout(()=>{duck.style.opacity='1';},200);
+  const pts=[[w*.66,wy-210,580],[w*.52,wy-130,580],[sx-18,sy-8,680]];
+  let t=300;pts.forEach(p=>{setTimeout(()=>{duck.style.transition=`left ${p[2]}ms cubic-bezier(.5,0,.5,1.3),top ${p[2]}ms cubic-bezier(.5,0,.5,1)`;duck.style.left=p[0]+'px';duck.style.top=p[1]+'px';},t);t+=p[2];});
+  const wob=setInterval(()=>{duck.style.transform=`rotate(${(Math.random()-.5)*40}deg)`;},200);
+  setTimeout(()=>{clearInterval(wob);duck.style.transform='rotate(-8deg) scale(.8)';duck.style.fontSize='2rem';},2000);
+  setTimeout(done,2600);clearAfter(stage,3000);
+}
+
+function animWhale(stage,done){
+  const{w}=stageSize();const wy=waterY();const{x:sx}=shipXY();
+  mkCap(stage,'🐋 Something enormous stirs beneath…');
+  const wx=sx+(Math.random()<.5?-110:110);
+  const whale=mkEl(stage,'anim-whale',{left:(wx-24)+'px',top:(wy+80)+'px',opacity:'0',transition:'top 1.2s cubic-bezier(.33,1,.68,1),opacity .4s',fontSize:'5rem'});
+  whale.textContent='🐋';
+  setTimeout(()=>{whale.style.opacity='1';whale.style.top=(wy-55)+'px';},300);
+  setTimeout(()=>splashes(stage,wx+24,wy,12),900);
+  setTimeout(()=>{whale.style.transition='top .8s cubic-bezier(.5,0,1,.5),opacity .5s';whale.style.top=(wy+100)+'px';whale.style.opacity='0';},2000);
+  setTimeout(done,2900);clearAfter(stage,3300);
+}
+
+function animStowaway(stage,done){
+  const{w}=stageSize();const wy=waterY();const{x:sx}=shipXY();
+  mkCap(stage,'🧍 Wait — who is that?!');
+  const person=mkEl(stage,'anim-stoway',{left:(sx-18)+'px',top:(wy-10)+'px',transform:'translateY(40px)'});
+  person.textContent='🧍';
+  setTimeout(()=>{person.style.opacity='1';person.style.transform='translateY(0)';person.style.top=(wy-65)+'px';},600);
+  let dir=1;const look=setInterval(()=>{person.style.transform=`scaleX(${dir}) translateY(0)`;dir*=-1;},400);
+  setTimeout(()=>clearInterval(look),2200);
+  setTimeout(done,2600);clearAfter(stage,3000);
+}
+
+function animFishing(stage,done){
+  const{w}=stageSize();const wy=waterY();const{x:sx}=shipXY();
+  mkCap(stage,'🐟 The fish are biting like crazy!');
+  [-80,-50,-20,20,50,80,110].forEach((dx,i)=>{
+    const fish=mkEl(stage,'anim-fish',{left:(sx+dx-10)+'px',top:(wy+30)+'px',opacity:'0',transition:`top .6s cubic-bezier(.33,1,.68,1),opacity .2s`,transitionDelay:(i*.12)+'s'});
+    fish.textContent=['🐟','🐠','🐡'][i%3];
+    setTimeout(()=>{fish.style.opacity='1';fish.style.top=(wy-38-Math.random()*38)+'px';},200+i*120);
+    setTimeout(()=>{fish.style.transition='top .5s ease-in,opacity .3s';fish.style.top=(wy+40)+'px';fish.style.opacity='0';},900+i*120);
+  });
+  for(let i=0;i<6;i++){const sp=mkEl(stage,'anim-sparkle',{left:(sx-55+Math.random()*110)+'px',top:(wy-75+Math.random()*55)+'px','--spt':'1.2s','--spd':(i*.18)+'s'});sp.textContent='✨';}
+  setTimeout(done,2700);clearAfter(stage,3100);
+}
+
+function animSpring(stage,done){
+  const{w}=stageSize();const wy=waterY();const{x:sx}=shipXY();
+  mkCap(stage,'💧 A fresh water spring — what luck!');
+  const isle=mkEl(stage,'anim-actor',{left:(w*.72)+'px',top:(wy-18)+'px',fontSize:'3rem',opacity:'0',transition:'opacity .6s'});
+  isle.textContent='🏝️';setTimeout(()=>{isle.style.opacity='1';},200);
+  for(let i=0;i<8;i++){
+    const d=mkEl(stage,'anim-sparkle',{left:(w*.78)+'px',top:(wy-28)+'px','--spt':'.9s','--spd':(i*.15)+'s'});
+    d.textContent='💧';
+    setTimeout(()=>{d.style.transition='left .9s ease,top .9s cubic-bezier(.5,0,.5,1)';d.style.left=(sx-8+(Math.random()-.5)*38)+'px';d.style.top=(wy-48)+'px';},200+i*150);
+  }
+  for(let i=0;i<8;i++){const sp=mkEl(stage,'anim-sparkle',{left:(sx-48+Math.random()*96)+'px',top:(wy-95+Math.random()*75)+'px','--spt':'1.3s','--spd':(0.6+i*.12)+'s'});sp.textContent=['✨','💫','⭐'][i%3];}
+  setTimeout(done,2700);clearAfter(stage,3100);
+}
+
+function animMerchant(stage,done){
+  const{w}=stageSize();const wy=waterY();const{x:sx}=shipXY();
+  mkCap(stage,'🏪 A friendly merchant vessel approaches!');
+  const ship=mkEl(stage,'anim-merchant',{left:(w+20)+'px',top:(wy-58)+'px',transition:'left 2.1s cubic-bezier(.3,0,.7,1)'});
+  ship.textContent='⛴️';setTimeout(()=>{ship.style.left=(sx+130)+'px';},100);
+  setTimeout(()=>{for(let i=0;i<8;i++){const sp=mkEl(stage,'anim-sparkle',{left:(sx+60+Math.random()*95)+'px',top:(wy-58+Math.random()*48)+'px','--spt':'1s','--spd':(i*.13)+'s'});sp.textContent=['💰','📦','✨'][i%3];}},2000);
+  setTimeout(done,3100);clearAfter(stage,3500);
+}
+
+/* ═══════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════ */
+function clamp(v,mn,mx){return Math.max(mn,Math.min(mx,v));}
+function lerp(a,b,t){return a+(b-a)*t;}
+function rand(a,b){return a+Math.random()*(b-a);}
+function resetIn(inId,fbId){
+  const i=document.getElementById(inId);i.value='';i.className='math-in';
+  const f=document.getElementById(fbId);f.textContent='';f.className='math-fb';
+}
+function showFb(id,msg,cls){const el=document.getElementById(id);el.textContent=msg;el.className='math-fb '+cls;}
+let toastT;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3000);}
+
+/* ═══════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════ */
+window.onload=initGame;
+</script>
+</body>
+</html>
