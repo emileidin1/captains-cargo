@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Captain's Log — Voyage Simulator</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;overflow:hidden;font-family:'Georgia',serif;user-select:none;}
+
+/* ── MAIN LAYOUT ─────────────────────────────────────── */
+#app{width:100vw;height:100vh;display:flex;flex-direction:column;}
+#hud-top{height:52px;background:linear-gradient(180deg,#1a0f00 0%,#0d0700 100%);
+  border-bottom:2px solid #8B5E00;display:flex;align-items:center;
+  padding:0 16px;gap:24px;z-index:10;}
+#main-area{flex:1;display:flex;overflow:hidden;}
+#left-panel{width:220px;background:#0a0a0a;border-right:2px solid #2a1800;
+  display:flex;flex-direction:column;overflow:hidden;}
+#viewport{flex:1;position:relative;overflow:hidden;background:#000;}
+#right-panel{width:200px;background:#0a0a0a;border-left:2px solid #2a1800;
+  display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── TOP HUD ─────────────────────────────────────────── */
+.hud-badge{background:#1a0f00;border:1px solid #8B5E00;border-radius:6px;
+  padding:4px 12px;color:#d4a847;font-size:.78rem;white-space:nowrap;}
+.hud-badge span{color:#fff;font-weight:bold;font-size:.9rem;}
+#hud-title{color:#d4a847;font-size:1.1rem;font-weight:bold;margin-right:auto;letter-spacing:.05em;}
+#threat-bar-wrap{flex:1;max-width:160px;}
+.threat-label{color:#d4a847;font-size:.68rem;text-align:center;margin-bottom:2px;}
+#threat-bar-bg{height:8px;background:#1a0800;border-radius:4px;overflow:hidden;}
+#threat-bar{height:100%;background:linear-gradient(90deg,#2ecc71,#f39c12,#e74c3c);
+  transition:width .3s;border-radius:4px;}
+
+/* ── 3D OCEAN VIEWPORT ───────────────────────────────── */
+#sky{position:absolute;left:0;right:0;top:0;height:50%;
+  background:linear-gradient(180deg,#0a1628 0%,#1a3a6e 50%,#2a5298 80%,#4a7bc8 100%);}
+#sun{position:absolute;width:60px;height:60px;border-radius:50%;
+  background:radial-gradient(circle,#fff9e0 20%,#ffe680 50%,rgba(255,200,0,0) 100%);
+  top:8%;left:65%;box-shadow:0 0 40px 20px rgba(255,220,100,.25);}
+#moon{position:absolute;width:40px;height:40px;border-radius:50%;
+  background:radial-gradient(circle,#e8e0cc 30%,#c8c0a8 70%,rgba(200,190,160,0) 100%);
+  top:12%;left:20%;display:none;box-shadow:0 0 30px 10px rgba(200,200,180,.2);}
+#stars{position:absolute;left:0;right:0;top:0;height:50%;pointer-events:none;opacity:0;}
+#clouds{position:absolute;left:0;right:0;top:0;height:50%;pointer-events:none;}
+#ocean{position:absolute;left:0;right:0;bottom:0;height:52%;
+  background:linear-gradient(180deg,#1a3a5c 0%,#0d2438 30%,#071520 100%);overflow:hidden;}
+#horizon-line{position:absolute;left:0;right:0;top:0;height:3px;
+  background:linear-gradient(90deg,transparent,rgba(74,123,200,.5),rgba(100,160,255,.8),rgba(74,123,200,.5),transparent);}
+
+/* Ocean perspective lines */
+#persp-lines{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;}
+
+/* Wave rows */
+.wave-row{position:absolute;left:-10%;width:120%;overflow:hidden;pointer-events:none;}
+.wave-row .wave-inner{white-space:nowrap;will-change:transform;}
+
+/* ── OBSTACLES LAYER ─────────────────────────────────── */
+#obstacles-layer{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;}
+.obstacle{position:absolute;transform:translateX(-50%);transition:none;pointer-events:none;
+  display:flex;flex-direction:column;align-items:center;}
+.obs-shadow{border-radius:50%;background:rgba(0,0,0,.4);filter:blur(4px);}
+
+/* Pirate ship styles */
+.pirate-ship{display:flex;flex-direction:column;align-items:center;}
+.pirate-hull{background:linear-gradient(180deg,#3d2000 0%,#1a0d00 100%);
+  border-radius:40% 40% 0 0 / 60% 60% 0 0;position:relative;}
+.pirate-mast{background:#2a1500;position:absolute;left:50%;transform:translateX(-50%);}
+.pirate-sail{background:linear-gradient(180deg,#c8c0a0 0%,#a09880 100%);
+  position:absolute;left:50%;transform:translateX(-50%);}
+.pirate-flag{font-size:.8em;position:absolute;top:0;left:50%;}
+.pirate-cannon-flash{position:absolute;border-radius:50%;background:radial-gradient(circle,#fff 0%,#ff0 30%,rgba(255,100,0,0) 100%);
+  pointer-events:none;animation:flash .15s forwards;}
+@keyframes flash{0%{opacity:1;transform:scale(.5);}100%{opacity:0;transform:scale(2);}}
+
+/* Cannonball */
+.cannonball{position:absolute;border-radius:50%;background:radial-gradient(circle,#555 30%,#111);
+  box-shadow:0 2px 4px rgba(0,0,0,.7);pointer-events:none;}
+
+/* Warning ─ incoming */
+.obs-warning{position:absolute;right:12px;background:rgba(200,0,0,.85);
+  color:#fff;border-radius:6px;padding:3px 8px;font-size:.75rem;font-weight:bold;
+  display:none;align-items:center;gap:4px;z-index:50;border:1px solid #ff4444;}
+
+/* ── PORTHOLE OVERLAY ────────────────────────────────── */
+#porthole{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;z-index:20;}
+
+/* ── SHIP WHEEL & HELM ───────────────────────────────── */
+#helm-area{position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+  width:340px;height:160px;z-index:25;pointer-events:none;}
+#helm-panel{position:absolute;bottom:0;left:0;right:0;height:130px;
+  background:linear-gradient(180deg,#2a1200 0%,#1a0900 100%);
+  border-top:3px solid #8B5E00;border-radius:20px 20px 0 0;
+  box-shadow:0 -4px 20px rgba(0,0,0,.8);}
+#wheel-wrap{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);}
+#wheel{font-size:5rem;line-height:1;transition:transform .15s ease;filter:drop-shadow(0 4px 8px rgba(0,0,0,.6));}
+#compass-rose{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+  color:#d4a847;font-size:.75rem;text-align:center;letter-spacing:.08em;}
+#heading-val{color:#fff;font-size:.85rem;font-weight:bold;}
+#speed-display{position:absolute;bottom:12px;right:20px;color:#d4a847;font-size:.72rem;text-align:right;}
+#speed-val{color:#2ecc71;font-size:.95rem;font-weight:bold;}
+
+/* Cannon sights */
+#cannon-sight{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);
+  width:80px;height:80px;pointer-events:none;z-index:22;opacity:0;transition:opacity .2s;}
+#cannon-sight.active{opacity:1;}
+.sight-ring{position:absolute;border:2px solid rgba(255,80,0,.85);border-radius:50%;}
+.sight-h{position:absolute;top:50%;left:0;right:0;height:1px;background:rgba(255,80,0,.7);transform:translateY(-50%);}
+.sight-v{position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,80,0,.7);transform:translateX(-50%);}
+
+/* ── LEFT PANEL: CARGO MANIFEST ──────────────────────── */
+#left-panel h3{color:#d4a847;font-size:.8rem;letter-spacing:.1em;padding:10px 12px 6px;
+  border-bottom:1px solid #2a1800;text-transform:uppercase;}
+#cargo-list{flex:1;overflow-y:auto;padding:8px;}
+#cargo-list::-webkit-scrollbar{width:4px;}
+#cargo-list::-webkit-scrollbar-thumb{background:#3a2000;}
+.cargo-row{background:#111;border:1px solid #2a1800;border-radius:6px;
+  margin-bottom:6px;padding:8px 10px;cursor:pointer;transition:border-color .2s,background .2s;}
+.cargo-row:hover{border-color:#8B5E00;background:#1a1000;}
+.cargo-row.dropping{border-color:#e74c3c;background:#1a0500;animation:dropPulse .4s;}
+@keyframes dropPulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.cargo-name{color:#e8d5a0;font-size:.78rem;font-weight:bold;}
+.cargo-weight{color:#f39c12;font-size:.72rem;}
+.cargo-effect{color:#888;font-size:.68rem;margin-top:2px;font-style:italic;}
+.cargo-drop-btn{background:#3d1500;border:1px solid #8B3000;color:#ff6b35;
+  border-radius:4px;padding:2px 7px;font-size:.68rem;cursor:pointer;margin-top:4px;float:right;}
+.cargo-drop-btn:hover{background:#5d2500;}
+#cargo-total{padding:8px 12px;border-top:1px solid #2a1800;
+  color:#d4a847;font-size:.78rem;display:flex;justify-content:space-between;}
+#cargo-total-val{color:#fff;font-weight:bold;}
+
+/* ── RIGHT PANEL: STATUS ─────────────────────────────── */
+#right-panel h3{color:#d4a847;font-size:.8rem;letter-spacing:.1em;padding:10px 12px 6px;
+  border-bottom:1px solid #2a1800;text-transform:uppercase;}
+#hull-section{padding:10px 12px;}
+.stat-label{color:#888;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;}
+.stat-bar-bg{height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden;margin-bottom:10px;}
+.stat-bar-fill{height:100%;border-radius:5px;transition:width .4s;}
+#hull-fill{background:linear-gradient(90deg,#e74c3c,#f39c12,#2ecc71);}
+#buoy-fill{background:linear-gradient(90deg,#e74c3c,#3498db);}
+#moral-fill{background:linear-gradient(90deg,#9b59b6,#3498db,#2ecc71);}
+.stat-val{color:#fff;font-size:.85rem;font-weight:bold;margin-bottom:8px;}
+#buoyancy-big{font-size:2rem;font-weight:bold;text-align:center;margin:8px 0;
+  color:#3498db;transition:color .5s;}
+#buoyancy-big.danger{color:#f39c12;}
+#buoyancy-big.critical{color:#e74c3c;animation:critPulse 1s infinite;}
+@keyframes critPulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+#buoy-sink-label{color:#888;font-size:.68rem;text-align:center;margin-bottom:10px;}
+#event-log{flex:1;overflow-y:auto;padding:8px 12px;}
+#event-log::-webkit-scrollbar{width:4px;}
+#event-log::-webkit-scrollbar-thumb{background:#3a2000;}
+.log-entry{font-size:.7rem;color:#aaa;padding:3px 0;border-bottom:1px solid #1a1a1a;line-height:1.3;}
+.log-entry.bad{color:#e74c3c;}
+.log-entry.good{color:#2ecc71;}
+.log-entry.neutral{color:#f39c12;}
+
+/* ── MATH MODAL ──────────────────────────────────────── */
+#math-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;
+  display:none;align-items:center;justify-content:center;}
+#math-modal.open{display:flex;}
+#math-box{background:linear-gradient(180deg,#0d1a2e 0%,#07111f 100%);
+  border:2px solid #8B5E00;border-radius:16px;padding:32px;max-width:500px;width:90%;
+  box-shadow:0 0 60px rgba(0,0,0,.9);position:relative;}
+#math-event-icon{font-size:3.5rem;text-align:center;margin-bottom:8px;}
+#math-event-name{color:#d4a847;font-size:1.1rem;font-weight:bold;text-align:center;margin-bottom:4px;}
+#math-event-story{color:#aaa;font-size:.85rem;text-align:center;margin-bottom:20px;line-height:1.5;}
+#math-equation{background:#0a1628;border-radius:10px;padding:16px;margin-bottom:16px;text-align:center;}
+#math-equation .eq-lhs{color:#e8d5a0;font-size:1.3rem;letter-spacing:.05em;}
+#math-equation .eq-plus{color:#d4a847;font-size:1.5rem;margin:0 8px;}
+#math-equation .eq-rhs{color:#e74c3c;font-size:1.4rem;font-weight:bold;}
+#math-equation .eq-eq{color:#888;font-size:1.5rem;margin:0 8px;}
+#math-equation .eq-q{color:#3498db;font-size:1.6rem;font-weight:bold;}
+#math-input-row{display:flex;gap:10px;margin-bottom:12px;}
+#math-input{flex:1;background:#0a1628;border:2px solid #3a5278;border-radius:8px;
+  color:#fff;font-size:1.4rem;text-align:center;padding:8px;outline:none;
+  font-family:'Georgia',serif;}
+#math-input:focus{border-color:#8B5E00;}
+#math-submit{background:#1a4a0a;border:2px solid #2ecc71;color:#2ecc71;
+  border-radius:8px;padding:8px 20px;font-size:1rem;cursor:pointer;font-family:'Georgia',serif;}
+#math-submit:hover{background:#2a6a1a;}
+#math-hint{color:#f39c12;font-size:.8rem;text-align:center;min-height:1.2em;margin-bottom:8px;}
+#math-impact{color:#888;font-size:.78rem;text-align:center;}
+#math-impact .impact-val{font-weight:bold;}
+#math-impact .impact-val.neg{color:#e74c3c;}
+#math-impact .impact-val.pos{color:#2ecc71;}
+
+/* Cargo drop choice modal */
+#drop-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:101;
+  display:none;align-items:center;justify-content:center;}
+#drop-modal.open{display:flex;}
+#drop-box{background:linear-gradient(180deg,#0d1a2e 0%,#07111f 100%);
+  border:2px solid #8B3000;border-radius:16px;padding:28px;max-width:480px;width:90%;}
+#drop-box h2{color:#e74c3c;text-align:center;margin-bottom:6px;}
+#drop-box p{color:#aaa;font-size:.85rem;text-align:center;margin-bottom:16px;}
+#drop-choices{display:flex;flex-direction:column;gap:8px;}
+.drop-choice{background:#0d1a0d;border:1px solid #2a1800;border-radius:8px;
+  padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;
+  transition:border-color .2s,background .2s;}
+.drop-choice:hover{border-color:#8B5E00;background:#1a2a1a;}
+.drop-choice-name{color:#e8d5a0;font-size:.85rem;}
+.drop-choice-weight{color:#2ecc71;font-size:.85rem;font-weight:bold;}
+.drop-choice-effect{color:#888;font-size:.7rem;margin-top:2px;}
+#drop-cancel{margin-top:12px;width:100%;background:#1a0800;border:1px solid #8B3000;
+  color:#e74c3c;padding:8px;border-radius:8px;cursor:pointer;font-size:.85rem;}
+
+/* ── SCRIPTED EVENT ANIMATIONS ───────────────────────── */
+#anim-layer{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;z-index:30;overflow:hidden;}
+.anim-obj{position:absolute;font-size:3rem;pointer-events:none;will-change:transform;}
+
+/* Duck animation */
+@keyframes duckFly{
+  0%  {transform:translate(110vw,-10vh) scale(.3);}
+  60% {transform:translate(50vw, 20vh) scale(.8);}
+  80% {transform:translate(48vw, 22vh) scale(.9);}
+  100%{transform:translate(48vw, 22vh) scale(1);}
+}
+.duck-anim{animation:duckFly 2.2s cubic-bezier(.3,.6,.5,1) forwards;}
+
+/* Whale animation */
+@keyframes whaleBreach{
+  0%  {transform:translate(45vw,100vh) scale(.3) rotate(-15deg);opacity:.4;}
+  40% {transform:translate(45vw, 35vh) scale(1.4) rotate(5deg);opacity:1;}
+  70% {transform:translate(45vw, 35vh) scale(1.3) rotate(5deg);}
+  100%{transform:translate(45vw, 80vh) scale(.5) rotate(-5deg);opacity:0;}
+}
+.whale-anim{animation:whaleBreach 3s ease-in-out forwards;}
+
+/* Stowaway animation */
+@keyframes stowawayPop{
+  0%  {transform:translate(50vw,100vh) scale(.5);}
+  50% {transform:translate(50vw, 30vh) scale(1.1);}
+  70% {transform:translate(50vw, 30vh) scale(1);}
+  100%{transform:translate(50vw, 30vh) scale(1);}
+}
+.stowaway-anim{animation:stowawayPop 1.5s ease-out forwards;}
+
+/* Pirate approach */
+@keyframes pirateApproach{
+  0%  {transform:translate(var(--sx),var(--sy)) scale(.05);}
+  100%{transform:translate(var(--tx),var(--ty)) scale(var(--ts));}
+}
+
+/* Cannon fire from player */
+@keyframes playerCannon{
+  0%  {transform:translate(var(--px),var(--py)) scale(1);opacity:1;}
+  100%{transform:translate(var(--ex),var(--ey)) scale(.3);opacity:0;}
+}
+
+/* Explosion */
+@keyframes explode{
+  0%  {transform:translate(-50%,-50%) scale(.2);opacity:1;}
+  50% {transform:translate(-50%,-50%) scale(2);opacity:.8;}
+  100%{transform:translate(-50%,-50%) scale(3);opacity:0;}
+}
+.explosion{position:absolute;font-size:2rem;pointer-events:none;
+  animation:explode .6s ease-out forwards;}
+
+/* Damage flash */
+@keyframes dmgFlash{0%,100%{opacity:0;}50%{opacity:.6;}}
+#damage-overlay{position:absolute;inset:0;background:#e74c3c;pointer-events:none;
+  opacity:0;z-index:35;}
+#damage-overlay.flash{animation:dmgFlash .35s ease;}
+
+/* Screen shake */
+@keyframes shake{
+  0%,100%{transform:translate(0,0);}
+  20%{transform:translate(-6px,3px);}
+  40%{transform:translate(6px,-3px);}
+  60%{transform:translate(-4px,2px);}
+  80%{transform:translate(4px,-2px);}
+}
+#viewport.shake{animation:shake .35s ease;}
+
+/* Day/night indicator */
+#time-display{position:absolute;top:8px;right:12px;color:rgba(255,255,255,.5);font-size:.72rem;z-index:26;}
+
+/* Score/combo */
+#combo-display{position:absolute;top:60px;right:12px;color:#f39c12;font-size:.85rem;
+  font-weight:bold;z-index:26;text-align:right;text-shadow:0 2px 4px rgba(0,0,0,.8);}
+
+/* ── WELCOME / GAME-OVER SCREENS ─────────────────────── */
+#screen-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;
+  display:flex;align-items:center;justify-content:center;}
+#screen-box{background:linear-gradient(180deg,#0d1a2e 0%,#07111f 100%);
+  border:2px solid #8B5E00;border-radius:20px;padding:40px;max-width:560px;
+  width:90%;text-align:center;box-shadow:0 0 80px rgba(0,0,0,1);}
+#screen-box h1{color:#d4a847;font-size:2rem;margin-bottom:12px;}
+#screen-box .subtitle{color:#888;font-size:.9rem;margin-bottom:24px;line-height:1.6;}
+#screen-box .key-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  margin-bottom:24px;text-align:left;}
+.key-item{background:#0a1628;border-radius:8px;padding:8px 12px;}
+.key-item .key{color:#d4a847;font-size:.8rem;font-weight:bold;}
+.key-item .kdesc{color:#888;font-size:.75rem;margin-top:2px;}
+#screen-btn{background:linear-gradient(180deg,#1a4a8a,#0d3060);border:2px solid #3498db;
+  color:#fff;border-radius:10px;padding:14px 40px;font-size:1.1rem;cursor:pointer;
+  font-family:'Georgia',serif;letter-spacing:.05em;}
+#screen-btn:hover{background:linear-gradient(180deg,#2a5a9a,#1a4070);}
+#gameover-stats{background:#0a1628;border-radius:10px;padding:16px;margin-bottom:20px;}
+.go-stat{display:flex;justify-content:space-between;padding:4px 0;
+  border-bottom:1px solid #1a2a3a;color:#aaa;font-size:.85rem;}
+.go-stat:last-child{border:none;}
+.go-stat span{color:#fff;font-weight:bold;}
+
+/* ── WEATHER EFFECTS ─────────────────────────────────── */
+#rain-layer{position:absolute;inset:0;pointer-events:none;z-index:18;opacity:0;transition:opacity 2s;}
+.rain-drop{position:absolute;width:1px;background:linear-gradient(180deg,transparent,rgba(100,180,255,.6));
+  animation:rainFall linear infinite;}
+@keyframes rainFall{0%{transform:translateY(-20px);}100%{transform:translateY(110vh);}}
+#fog-layer{position:absolute;inset:0;pointer-events:none;z-index:17;
+  background:radial-gradient(ellipse at 50% 60%,rgba(150,170,190,.15) 0%,transparent 70%);
+  opacity:0;transition:opacity 3s;}
+
+/* ── CANNON FIRE ─────────────────────────────────────── */
+#fire-btn{position:absolute;bottom:100px;left:50%;transform:translateX(-50%);
+  background:#5d0000;border:2px solid #cc0000;color:#ff4444;border-radius:50%;
+  width:56px;height:56px;font-size:1.4rem;cursor:pointer;z-index:26;
+  display:none;align-items:center;justify-content:center;
+  box-shadow:0 0 20px rgba(200,0,0,.5);transition:transform .1s,box-shadow .1s;}
+#fire-btn:hover{transform:translateX(-50%) scale(1.1);box-shadow:0 0 30px rgba(200,0,0,.8);}
+#fire-btn:active{transform:translateX(-50%) scale(.95);}
+
+/* Aim arrows */
+#aim-left{position:absolute;left:20px;top:50%;transform:translateY(-50%);
+  color:rgba(255,80,0,.7);font-size:2rem;z-index:26;display:none;}
+#aim-right{position:absolute;right:20px;top:50%;transform:translateY(-50%);
+  color:rgba(255,80,0,.7);font-size:2rem;z-index:26;display:none;}
+
+/* Pirate approach warning */
+#pirate-warning{position:absolute;top:20px;left:50%;transform:translateX(-50%);
+  background:rgba(180,0,0,.9);color:#fff;border:2px solid #ff0000;border-radius:8px;
+  padding:6px 20px;font-size:.85rem;font-weight:bold;z-index:28;display:none;
+  animation:warnPulse 1s infinite;}
+@keyframes warnPulse{0%,100%{box-shadow:0 0 10px rgba(255,0,0,.5);}50%{box-shadow:0 0 25px rgba(255,0,0,.9);}}
+
+/* Accuracy streaks display */
+#streak-display{position:absolute;top:60px;left:50%;transform:translateX(-50%);
+  color:#f39c12;font-size:1rem;font-weight:bold;z-index:28;text-align:center;
+  pointer-events:none;text-shadow:0 2px 8px rgba(0,0,0,.9);opacity:0;transition:opacity .3s;}
+#streak-display.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOP HUD -->
+  <div id="hud-top">
+    <div id="hud-title">⚓ Captain's Log</div>
+    <div class="hud-badge">Dist: <span id="hud-dist">0</span> km</div>
+    <div class="hud-badge">Score: <span id="hud-score">0</span></div>
+    <div class="hud-badge">Accuracy: <span id="hud-acc">—</span></div>
+    <div id="threat-bar-wrap">
+      <div class="threat-label">THREAT LEVEL</div>
+      <div id="threat-bar-bg"><div id="threat-bar" style="width:5%"></div></div>
+    </div>
+    <div class="hud-badge">Hull: <span id="hud-hull">100</span>%</div>
+    <div class="hud-badge" style="color:#3498db">Buoyancy: <span id="hud-buoy" style="color:#fff">-28</span></div>
+  </div>
+
+  <div id="main-area">
+
+    <!-- LEFT: CARGO MANIFEST -->
+    <div id="left-panel">
+      <h3>⚓ Cargo Manifest</h3>
+      <div id="cargo-list"></div>
+      <div id="cargo-total">
+        Cargo Weight: <span id="cargo-total-val">0 kg</span>
+      </div>
+      <div style="padding:6px 12px;border-top:1px solid #2a1800;">
+        <div style="color:#d4a847;font-size:.7rem;text-align:center;margin-bottom:4px;">CARGO BUOYANCY</div>
+        <div id="cargo-buoy-sum" style="color:#fff;font-size:1.3rem;font-weight:bold;text-align:center;">−28</div>
+      </div>
+    </div>
+
+    <!-- CENTER: VIEWPORT -->
+    <div id="viewport">
+      <!-- Sky -->
+      <div id="sky">
+        <div id="sun"></div>
+        <div id="moon"></div>
+        <div id="stars"></div>
+        <div id="clouds"></div>
+      </div>
+
+      <!-- Ocean -->
+      <div id="ocean">
+        <div id="horizon-line"></div>
+        <canvas id="ocean-canvas" style="position:absolute;left:0;top:0;width:100%;height:100%;"></canvas>
+      </div>
+
+      <!-- Obstacles layer -->
+      <div id="obstacles-layer"></div>
+
+      <!-- Animation layer -->
+      <div id="anim-layer"></div>
+
+      <!-- Porthole frame overlay -->
+      <svg id="porthole" viewBox="0 0 800 600" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="vignette" cx="50%" cy="50%" r="70%">
+            <stop offset="60%" stop-color="transparent"/>
+            <stop offset="100%" stop-color="rgba(0,0,0,0.85)"/>
+          </radialGradient>
+        </defs>
+        <rect width="800" height="600" fill="url(#vignette)"/>
+        <!-- Top corners -->
+        <path d="M0,0 L0,120 Q0,0 120,0 Z" fill="rgba(5,5,10,0.7)"/>
+        <path d="M800,0 L800,120 Q800,0 680,0 Z" fill="rgba(5,5,10,0.7)"/>
+        <!-- Bottom corners -->
+        <path d="M0,600 L0,480 Q0,600 120,600 Z" fill="rgba(5,5,10,0.7)"/>
+        <path d="M800,600 L800,480 Q800,600 680,600 Z" fill="rgba(5,5,10,0.7)"/>
+        <!-- Wooden frame accents -->
+        <rect x="0" y="0" width="800" height="4" fill="#4a2a00" opacity="0.6"/>
+        <rect x="0" y="596" width="800" height="4" fill="#4a2a00" opacity="0.6"/>
+      </svg>
+
+      <!-- Helm area -->
+      <div id="helm-area">
+        <div id="helm-panel">
+          <div id="compass-rose">
+            <div>N · NE · <span id="heading-val">E</span> · SE · S</div>
+          </div>
+          <div id="speed-display">
+            Speed<br><span id="speed-val">1.0×</span>
+          </div>
+        </div>
+        <div id="wheel-wrap"><div id="wheel">🎡</div></div>
+      </div>
+
+      <!-- Cannon sight -->
+      <div id="cannon-sight">
+        <div class="sight-ring" style="inset:0;"></div>
+        <div class="sight-ring" style="inset:20px;"></div>
+        <div class="sight-h"></div>
+        <div class="sight-v"></div>
+      </div>
+
+      <!-- Pirate combat UI -->
+      <div id="aim-left">◀</div>
+      <div id="aim-right">▶</div>
+      <button id="fire-btn" title="Fire Cannons! [SPACE]">💥</button>
+      <div id="pirate-warning">⚠ PIRATE SHIP APPROACHING</div>
+
+      <!-- Weather / Damage -->
+      <div id="rain-layer"></div>
+      <div id="fog-layer"></div>
+      <div id="damage-overlay"></div>
+
+      <!-- HUD overlays -->
+      <div id="time-display">🌅 Dawn  |  Day 1</div>
+      <div id="combo-display"></div>
+      <div id="streak-display"></div>
+    </div>
+
+    <!-- RIGHT: STATUS PANEL -->
+    <div id="right-panel">
+      <h3>🛡 Ship Status</h3>
+      <div id="hull-section">
+        <div class="stat-label">Hull Integrity</div>
+        <div class="stat-bar-bg"><div class="stat-bar-fill" id="hull-fill" style="width:100%"></div></div>
+        <div class="stat-val" id="hull-val">100%</div>
+
+        <div class="stat-label">Buoyancy</div>
+        <div class="stat-bar-bg"><div class="stat-bar-fill" id="buoy-fill" style="width:50%"></div></div>
+        <div id="buoyancy-big">−28</div>
+        <div id="buoy-sink-label">/ −50 sinks</div>
+
+        <div class="stat-label">Crew Morale</div>
+        <div class="stat-bar-bg"><div class="stat-bar-fill" id="moral-fill" style="width:80%"></div></div>
+        <div class="stat-val" id="moral-val">80%</div>
+      </div>
+      <h3 style="margin-top:auto;">📜 Ship's Log</h3>
+      <div id="event-log"></div>
+    </div>
+
+  </div><!-- end main-area -->
+</div><!-- end app -->
+
+<!-- ── MATH MODAL ── -->
+<div id="math-modal">
+  <div id="math-box">
+    <div id="math-event-icon">⚓</div>
+    <div id="math-event-name">Event</div>
+    <div id="math-event-story">Story text here.</div>
+    <div id="math-equation">
+      <span class="eq-lhs" id="eq-lhs">−28</span>
+      <span class="eq-plus">+</span>
+      <span class="eq-rhs" id="eq-rhs">(−22)</span>
+      <span class="eq-eq">=</span>
+      <span class="eq-q">?</span>
+    </div>
+    <div id="math-hint"></div>
+    <div id="math-input-row">
+      <input id="math-input" type="text" placeholder="Your answer…" autocomplete="off"/>
+      <button id="math-submit">Confirm</button>
+    </div>
+    <div id="math-impact"></div>
+  </div>
+</div>
+
+<!-- ── DROP CARGO MODAL ── -->
+<div id="drop-modal">
+  <div id="drop-box">
+    <h2>⚠ Emergency Jettison</h2>
+    <p>The ship needs to shed weight. Choose cargo to drop overboard.</p>
+    <div id="drop-choices"></div>
+    <button id="drop-cancel">Keep all cargo (dangerous!)</button>
+  </div>
+</div>
+
+<!-- ── WELCOME / GAMEOVER SCREEN ── -->
+<div id="screen-overlay">
+  <div id="screen-box">
+    <h1 id="screen-title">⚓ Captain's Log</h1>
+    <div class="subtitle" id="screen-sub">You are the captain of the merchant vessel <em>HMS Calculated</em>. Navigate treacherous seas, fight off pirates, and manage your cargo — all using the power of negative number arithmetic!</div>
+    <div class="key-grid" id="key-grid">
+      <div class="key-item"><div class="key">← / → Arrow Keys</div><div class="kdesc">Steer port / starboard</div></div>
+      <div class="key-item"><div class="key">↑ Arrow / W</div><div class="kdesc">Increase speed</div></div>
+      <div class="key-item"><div class="key">↓ Arrow / S</div><div class="kdesc">Reduce speed</div></div>
+      <div class="key-item"><div class="key">SPACE</div><div class="kdesc">Fire cannons at pirates</div></div>
+      <div class="key-item"><div class="key">D</div><div class="kdesc">Drop cargo (emergency)</div></div>
+      <div class="key-item"><div class="key">P</div><div class="kdesc">Pause voyage</div></div>
+    </div>
+    <div id="gameover-stats" style="display:none;"></div>
+    <button id="screen-btn">⚓ Set Sail</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CARGO DATABASE
+// ═══════════════════════════════════════════════════════
+const CARGO_DB=[
+  {id:'food',    name:'Food Supplies',   icon:'🍖', kg:800,  b:-8,  dropEffect:'Crew goes hungry. Morale −20.',        moralDrop:-20},
+  {id:'water',   name:'Fresh Water',     icon:'💧', kg:600,  b:-6,  dropEffect:'Risk of scurvy. Morale −15.',           moralDrop:-15},
+  {id:'medical', name:'Medical Chest',   icon:'⚕️', kg:300,  b:-3,  dropEffect:'Injuries go untreated. Hull repair −30%.',moralDrop:-10},
+  {id:'charts',  name:'Navigation Charts',icon:'🗺️',kg:50,   b:-1,  dropEffect:'Navigation accuracy reduced.',          moralDrop:-5},
+  {id:'rope',    name:'Spare Rope',      icon:'🪢', kg:400,  b:-4,  dropEffect:'No emergency repairs possible.',        moralDrop:-5},
+  {id:'gold',    name:'Gold Cargo',      icon:'🪙', kg:1200, b:-12, dropEffect:'Major cargo loss! Morale −30.',         moralDrop:-30},
+  {id:'cannon_ammo',name:'Cannon Ammo',  icon:'💣', kg:500,  b:-5,  dropEffect:'Cannot fire cannons anymore.',          moralDrop:-8},
+  {id:'rum',     name:'Rum Barrels',     icon:'🍺', kg:400,  b:-4,  dropEffect:'Crew is furious. Morale −25.',          moralDrop:-25},
+];
+
+// ═══════════════════════════════════════════════════════
+// SCRIPTED EVENTS
+// ═══════════════════════════════════════════════════════
+const SCRIPTED_EVENTS=[
+  {id:'duck',     name:'Wounded Duck',        icon:'🦆', b:-4,  positive:false, interval:25, story:'A wounded duck lands on your mast, adding weight to the ship.', anim:'duck'},
+  {id:'whale',    name:'Whale Encounter',     icon:'🐋', b:-12, positive:false, interval:40, story:'A massive whale surfaces beneath your hull, rattling the ship!', anim:'whale'},
+  {id:'stowaway', name:'Stowaway Discovered', icon:'🧍', b:-8,  positive:false, interval:50, story:'Your cook discovers a stowaway hidden in the cargo hold!', anim:'stowaway'},
+  {id:'fishing',  name:'Magnificent Catch',   icon:'🐟', b:+8,  positive:true,  interval:30, story:'Your crew nets a magnificent haul! The fresh fish lighten the mood.', anim:'fishing'},
+  {id:'spring',   name:'Fresh Water Spring',  icon:'💧', b:+10, positive:true,  interval:55, story:'A passing island offers a fresh water spring — you dump old barrels.', anim:'spring'},
+  {id:'merchant', name:'Merchant Barter',     icon:'🏪', b:+7,  positive:true,  interval:45, story:'A friendly merchant trades you lighter goods for your heavy ones.', anim:'merchant'},
+  {id:'storm_dmg',name:'Storm Damage',        icon:'⛈️', b:-10, positive:false, interval:35, story:'A sudden storm batters the hull, flooding the lower deck!', anim:'storm'},
+  {id:'repair',   name:'Emergency Repairs',   icon:'🔨', b:+5,  positive:true,  interval:38, story:'Your carpenter manages to jettison waterlogged wood during repairs.', anim:'repair'},
+];
+
+// ═══════════════════════════════════════════════════════
+// PIRATE EVENTS
+// ═══════════════════════════════════════════════════════
+const PIRATE_EVENTS=[
+  {id:'sloop',  name:'Pirate Sloop',    icon:'🏴‍☠️', b:-15, hull:-15, reward:20, speed:1.4, shots:2,
+   story:'A fast pirate sloop attacks from starboard! Deflect their cannons or take heavy damage.'},
+  {id:'galleon',name:'Pirate Galleon',  icon:'⚔️',  b:-25, hull:-25, reward:40, speed:0.9, shots:4,
+   story:'A massive pirate galleon looms ahead! This will be a fierce battle.'},
+  {id:'corsair',name:'Corsair Raider',  icon:'🗡️',  b:-12, hull:-12, reward:15, speed:1.7, shots:2,
+   story:'A swift corsair swoops in from the fog, cannons blazing!'},
+];
+
+// ═══════════════════════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════════════════════
+const SINK=-50, WARN=-35, CRIT=-45;
+
+let G={
+  playing:false, paused:false,
+  loopId:null, lastTs:0,
+  dist:0, score:0, correctAnswers:0, totalAnswers:0,
+  buoyancy:-28, hull:100, morale:80,
+  heading:90, speed:1.0,         // heading in degrees (90=East)
+  wheelAngle:0,                   // visual wheel rotation
+  steerVel:0,                     // current steering input
+  cargo:[], day:1, timeOfDay:0,   // 0–1 (0=dawn, .25=noon, .5=dusk, .75=night)
+  obstacles:[], nextObsId:0,
+  pirates:[], activePirate:null,  // current pirate encounter
+  pirateAmmo:true,               // player can fire cannons
+  aimX:50,                        // cannon aim % across screen
+  inCombat:false,
+  mathPending:null,               // {lhs, rhs, answer, cb}
+  eventTimer:0,
+  eventQueue:[],
+  scriptedTimers:{},
+  combo:0, streak:0,
+  waveOffset:0,
+  weatherState:'clear',          // clear, rain, storm, fog
+  hitShake:false,
+};
+
+// ═══════════════════════════════════════════════════════
+// DOM REFS
+// ═══════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+function initGame(){
+  G.cargo = ['food','water','medical','charts','rope','cannon_ammo']
+    .map(id=>({...CARGO_DB.find(c=>c.id===id)}));
+
+  // re-compute buoyancy from cargo
+  G.buoyancy = G.cargo.reduce((s,c)=>s+c.b, 0);
+
+  buildCargoList();
+  buildStars();
+  buildRain();
+  renderStatus();
+  scheduleScriptedEvents();
+  scheduleObstacles();
+  addLog('⚓ Voyage begins. Safe winds, Captain.','neutral');
+}
+
+function buildStars(){
+  const s=$('stars'); s.innerHTML='';
+  for(let i=0;i<120;i++){
+    const d=document.createElement('div');
+    d.style.cssText=`position:absolute;border-radius:50%;background:#fff;
+      left:${Math.random()*100}%;top:${Math.random()*100}%;
+      width:${Math.random()<.1?3:Math.random()<.3?2:1}px;
+      height:${Math.random()<.1?3:Math.random()<.3?2:1}px;
+      opacity:${0.4+Math.random()*0.6};`;
+    s.appendChild(d);
+  }
+}
+
+function buildRain(){
+  const r=$('rain-layer'); r.innerHTML='';
+  for(let i=0;i<80;i++){
+    const d=document.createElement('div');
+    const dur=0.5+Math.random()*0.4;
+    const h=40+Math.random()*60;
+    d.className='rain-drop';
+    d.style.cssText=`left:${Math.random()*100}%;top:-20px;height:${h}px;
+      animation-duration:${dur}s;animation-delay:${-Math.random()*dur}s;`;
+    r.appendChild(d);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// GAME LOOP
+// ═══════════════════════════════════════════════════════
+function scheduleLoop(){
+  if(document.hidden){
+    G.loopId=setTimeout(()=>gameLoop(performance.now()),16);
+  } else {
+    G.loopId=requestAnimationFrame(gameLoop);
+  }
+}
+
+function gameLoop(ts){
+  if(!G.playing||G.paused) return;
+  const dt=Math.min((ts-G.lastTs)/1000,.05);
+  G.lastTs=ts;
+
+  updatePhysics(dt);
+  updateObstacles(dt);
+  updatePirates(dt);
+  updateEnvironment(dt);
+  renderAll();
+  scheduleLoop();
+}
+
+// ═══════════════════════════════════════════════════════
+// PHYSICS / STEERING
+// ═══════════════════════════════════════════════════════
+function updatePhysics(dt){
+  // Steer
+  G.heading += G.steerVel * dt * 20;
+  G.heading = ((G.heading % 360)+360)%360;
+  G.wheelAngle += G.steerVel * dt * 180;
+
+  // Distance
+  G.dist += G.speed * dt * 0.04; // km
+
+  // Time of day (full day = 10 min real time)
+  G.timeOfDay = (G.timeOfDay + dt/600) % 1;
+  G.day = Math.floor(G.dist / 10)+1;
+}
+
+// ═══════════════════════════════════════════════════════
+// OBSTACLES (environmental hazards — waves, rocks, etc.)
+// ═══════════════════════════════════════════════════════
+const OBS_TYPES=[
+  {id:'wave',  icon:'🌊', size:1.2, b:-10, hull:-5,  speed:1.2, story:'A rogue wave crashes over the bow!',       label:'Rogue Wave',   canDodge:true},
+  {id:'rock',  icon:'🪨', size:1.0, b:-8,  hull:-12, speed:0.7, story:'Hidden rocks scrape the hull!',            label:'Reef Ahead',   canDodge:true},
+  {id:'ice',   icon:'🧊', size:0.9, b:-6,  hull:-8,  speed:0.9, story:'An ice floe collides with the hull.',      label:'Ice Floe',     canDodge:true},
+  {id:'maelst',icon:'🌀', size:1.5, b:-18, hull:-10, speed:0.5, story:'A maelstrom drags at the hull!',           label:'Maelstrom',    canDodge:false},
+  {id:'debris',icon:'🪵', size:0.8, b:-5,  hull:-6,  speed:1.4, story:'Floating debris impacts the keel.',        label:'Debris Field', canDodge:true},
+];
+
+let obsSpawnTimer=0;
+function scheduleObstacles(){
+  obsSpawnTimer=8+Math.random()*10;
+}
+
+function updateObstacles(dt){
+  obsSpawnTimer-=dt;
+  if(obsSpawnTimer<=0){
+    spawnObstacle();
+    obsSpawnTimer=6+Math.random()*12 - Math.min(G.dist*0.05,5);
+  }
+
+  // Move obstacles toward player (they grow from horizon)
+  for(let i=G.obstacles.length-1;i>=0;i--){
+    const o=G.obstacles[i];
+    o.age+=dt;
+    o.scale=0.05+o.age*(o.def.speed*0.18);
+    // Horizontal drift based on heading
+    o.screenX += (G.steerVel*-0.3)*dt*60;
+
+    if(o.scale>1.8 && !o.hit){
+      // Miss — passed by
+      if(o.scale>2.2){ G.obstacles.splice(i,1); removeObsEl(o.id); }
+    }
+    if(o.scale>=1.0 && o.scale<1.25 && !o.hit && !o.checking && !G.paused){
+      if(o.def.canDodge){
+        // Check if player dodged (obstacle drifted off-center)
+        if(Math.abs(o.screenX-50)>28){
+          nearMiss(o);
+        } else {
+          o.checking=true;
+          obstacleHit(o);
+        }
+      } else {
+        o.checking=true;
+        obstacleHit(o);
+      }
+    }
+  }
+}
+
+function spawnObstacle(){
+  const def=OBS_TYPES[Math.floor(Math.random()*OBS_TYPES.length)];
+  const id=G.nextObsId++;
+  const screenX=30+Math.random()*40; // % from left
+  G.obstacles.push({id,def,age:0,scale:0.05,screenX,hit:false,checking:false});
+  const el=document.createElement('div');
+  el.id='obs'+id;
+  el.className='obstacle';
+  el.innerHTML=`<div class="obs-emoji" style="font-size:4rem;line-height:1;">${def.icon}</div>
+    <div style="color:rgba(255,180,0,.8);font-size:.7rem;font-weight:bold;margin-top:2px;">${def.label}</div>`;
+  $('obstacles-layer').appendChild(el);
+
+  // Warning indicator
+  const wa=document.createElement('div');
+  wa.id='warn'+id;
+  wa.style.cssText='position:absolute;top:42%;right:8px;color:#ff4444;font-size:1.3rem;z-index:50;';
+  wa.textContent='⚠ '+def.icon;
+  $('obstacles-layer').appendChild(wa);
+}
+
+function removeObsEl(id){
+  const e=$('obs'+id); if(e) e.remove();
+  const w=$('warn'+id); if(w) w.remove();
+}
+
+function nearMiss(o){
+  o.hit=true;
+  G.score+=15;
+  G.combo++;
+  showStreak('Near miss! +15');
+  addLog(`🎯 Dodged ${o.def.label}! +15 pts`,'good');
+  removeObsEl(o.id);
+}
+
+function obstacleHit(o){
+  o.hit=true;
+  flashDamage();
+  openMathModal({
+    icon: o.def.icon,
+    name: o.def.label,
+    story: o.def.story,
+    b: o.def.b,
+    hull: o.def.hull,
+    cb: ()=>{
+      G.obstacles=G.obstacles.filter(x=>x.id!==o.id);
+      removeObsEl(o.id);
+      checkSink();
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// PIRATE COMBAT
+// ═══════════════════════════════════════════════════════
+let pirateCooldown=30;
+
+function updatePirates(dt){
+  pirateCooldown-=dt;
+  if(pirateCooldown<=0 && !G.inCombat){
+    startPirateEncounter();
+    pirateCooldown=35+Math.random()*30 - Math.min(G.dist*0.08,15);
+  }
+}
+
+function startPirateEncounter(){
+  if(G.inCombat || G.paused || !G.playing) return;
+  const def=PIRATE_EVENTS[Math.floor(Math.random()*PIRATE_EVENTS.length)];
+  G.inCombat=true;
+  G.activePirate={...def, shotsLeft:def.shots, phase:'approaching', age:0, screenX:75, scale:0.05};
+  G.aimX=50;
+
+  addLog(`🏴‍☠️ ${def.name} spotted!`,'bad');
+  $('pirate-warning').style.display='block';
+
+  // Spawn pirate visual
+  spawnPirateEl();
+
+  // After 3 seconds of approach, combat starts
+  setTimeout(()=>{
+    if(!G.inCombat) return;
+    $('pirate-warning').style.display='none';
+    $('cannon-sight').classList.add('active');
+    $('fire-btn').style.display='flex';
+    $('aim-left').style.display='block';
+    $('aim-right').style.display='block';
+    G.activePirate.phase='combat';
+    addLog(`⚔️ Battle stations! Fire cannons with SPACE`,'bad');
+
+    // Pirate fires shots with delays
+    let delay=2000;
+    for(let i=0;i<def.shots;i++){
+      setTimeout(()=>pirateFire(), delay);
+      delay+=2500+Math.random()*1500;
+    }
+    // Combat ends after all shots
+    setTimeout(()=>endPirateCombat(false), delay+1500);
+  },3000);
+}
+
+function spawnPirateEl(){
+  const p=G.activePirate;
+  const el=document.createElement('div');
+  el.id='pirate-ship';
+  el.style.cssText=`position:absolute;left:${p.screenX}%;top:38%;
+    transform:translate(-50%,-50%) scale(${p.scale});
+    transition:transform .1s, left 2s;font-size:5rem;pointer-events:none;z-index:15;
+    filter:drop-shadow(0 4px 8px rgba(0,0,0,.8));`;
+  el.innerHTML='🏴‍☠️';
+  $('obstacles-layer').appendChild(el);
+
+  // Animate approach
+  setTimeout(()=>{
+    const e=$('pirate-ship');
+    if(e){
+      e.style.left='55%';
+      e.style.transform='translate(-50%,-50%) scale(0.9)';
+      e.style.transition='all 3s ease-in';
+    }
+  },100);
+}
+
+function pirateFire(){
+  if(!G.inCombat||!G.playing) return;
+  const p=G.activePirate;
+  p.shotsLeft--;
+
+  // Check if player aims near pirate
+  const pirX=55; // pirate is at ~55%
+  const hit=Math.abs(G.aimX-pirX)>20; // player NOT aiming at pirate = gets hit
+
+  if(hit){
+    // Player took the hit
+    flashDamage();
+    openMathModal({
+      icon:'💣',
+      name:`${p.name} — Cannon Hit!`,
+      story:`A cannonball from the ${p.name} smashes into your hull!`,
+      b: Math.round(p.b / p.shots),
+      hull: Math.round(p.hull / p.shots),
+      cb:()=>{ checkSink(); }
+    });
+    addLog(`💥 Cannon hit by ${p.name}!`,'bad');
+  } else {
+    // Player blocked / deflected
+    spawnExplosion(55, 38);
+    G.score+=10;
+    addLog(`🎯 Deflected cannon shot! +10`,'good');
+    G.combo++;
+    showStreak('Deflected! +10');
+  }
+}
+
+function playerFireCannon(){
+  if(!G.inCombat || G.activePirate?.phase!=='combat') return;
+  if(!G.pirateAmmo){ addLog('❌ No cannon ammo!','bad'); return; }
+
+  const pirX=55;
+  const dist=Math.abs(G.aimX-pirX);
+
+  spawnPlayerCannonball();
+
+  if(dist<15){
+    // Direct hit on pirate
+    spawnExplosion(pirX,38);
+    G.score+=25;
+    G.combo++;
+    showStreak('Direct hit! +25');
+    addLog(`💥 Direct hit on ${G.activePirate?.name}! +25`,'good');
+
+    // Reward reduces pirate damage
+    if(G.activePirate) G.activePirate.b=Math.round(G.activePirate.b*0.6);
+  } else {
+    addLog('🎯 Missed! Adjust your aim.','neutral');
+  }
+}
+
+function endPirateCombat(defeated){
+  G.inCombat=false;
+  G.activePirate=null;
+  const el=$('pirate-ship'); if(el) el.remove();
+  $('pirate-warning').style.display='none';
+  $('cannon-sight').classList.remove('active');
+  $('fire-btn').style.display='none';
+  $('aim-left').style.display='none';
+  $('aim-right').style.display='none';
+
+  if(defeated){
+    addLog('⚓ Pirate ship repelled!','good');
+  } else {
+    addLog('🏴‍☠️ Pirates withdraw into the fog.','neutral');
+  }
+}
+
+function spawnExplosion(pctX, pctY){
+  const vp=$('viewport');
+  const el=document.createElement('div');
+  el.className='explosion';
+  el.style.left=pctX+'%';
+  el.style.top=pctY+'%';
+  el.textContent='💥';
+  $('anim-layer').appendChild(el);
+  setTimeout(()=>el.remove(),700);
+}
+
+function spawnPlayerCannonball(){
+  const vp=$('viewport');
+  const el=document.createElement('div');
+  el.style.cssText=`position:absolute;left:50%;bottom:30%;font-size:1.5rem;
+    pointer-events:none;z-index:22;animation:playerCannon .5s ease-in forwards;
+    --px:0px;--py:0px;--ex:${(G.aimX-50)*8}px;--ey:-200px;`;
+  el.textContent='💣';
+  $('anim-layer').appendChild(el);
+  setTimeout(()=>el.remove(),600);
+}
+
+// ═══════════════════════════════════════════════════════
+// SCRIPTED EVENTS
+// ═══════════════════════════════════════════════════════
+function scheduleScriptedEvents(){
+  SCRIPTED_EVENTS.forEach(ev=>{
+    const delay=(ev.interval+Math.random()*10)*1000;
+    G.scriptedTimers[ev.id]=setTimeout(()=>triggerScriptedEvent(ev), delay);
+  });
+}
+
+function triggerScriptedEvent(ev){
+  if(!G.playing) return;
+  playAnimAndThenEvent(ev);
+
+  // Reschedule
+  const delay=(ev.interval+Math.random()*15)*1000;
+  G.scriptedTimers[ev.id]=setTimeout(()=>triggerScriptedEvent(ev), delay);
+}
+
+function playAnimAndThenEvent(ev){
+  const el=document.createElement('div');
+  el.className='anim-obj';
+  el.textContent=ev.icon;
+  el.style.fontSize='3.5rem';
+
+  let animClass='';
+  if(ev.anim==='duck'||ev.anim==='fishing') animClass='duck-anim';
+  else if(ev.anim==='whale') animClass='whale-anim';
+  else animClass='stowaway-anim';
+
+  el.classList.add(animClass);
+  $('anim-layer').appendChild(el);
+
+  const dur=ev.anim==='whale'?3000:ev.anim==='duck'?2200:1500;
+
+  setTimeout(()=>{
+    if(!G.playing) return;
+    pauseGame();
+    openMathModal({
+      icon: ev.icon,
+      name: ev.name,
+      story: ev.story,
+      b: ev.b,
+      hull: 0,
+      cb:()=>{
+        resumeGame();
+        el.remove();
+      }
+    });
+  }, dur);
+}
+
+// ═══════════════════════════════════════════════════════
+// MATH MODAL
+// ═══════════════════════════════════════════════════════
+function openMathModal({icon,name,story,b,hull,cb}){
+  G.paused=true;
+  const lhs=G.buoyancy;
+  const rhs=b;
+  const answer=lhs+rhs;
+
+  G.mathPending={lhs,rhs,answer,b,hull,cb};
+
+  $('math-event-icon').textContent=icon;
+  $('math-event-name').textContent=name;
+  $('math-event-story').textContent=story;
+  $('eq-lhs').textContent=lhs<0?lhs:`+${lhs}`;
+  $('eq-rhs').textContent=rhs<0?`(${rhs})`:`(+${rhs})`;
+  $('math-hint').textContent='';
+  $('math-input').value='';
+
+  // Impact display
+  const bSign=b<0?'':'+';
+  const hSign=(hull&&hull<0)?'':'+';
+  $('math-impact').innerHTML=
+    `Buoyancy impact: <span class="impact-val ${b<0?'neg':'pos'}">${bSign}${b}</span>` +
+    (hull? ` | Hull: <span class="impact-val ${hull<0?'neg':'pos'}">${hSign}${hull}%</span>`:'') +
+    `<br>Current buoyancy: ${lhs}`;
+
+  $('math-modal').classList.add('open');
+  setTimeout(()=>$('math-input').focus(),100);
+}
+
+$('math-submit').addEventListener('click', checkMath);
+$('math-input').addEventListener('keydown', e=>{ if(e.key==='Enter') checkMath(); });
+
+function checkMath(){
+  const p=G.mathPending;
+  if(!p) return;
+  const val=parseInt($('math-input').value,10);
+  if(isNaN(val)){ $('math-hint').textContent='⚠ Enter a number!'; return; }
+
+  G.totalAnswers++;
+  if(val===p.answer){
+    // Correct
+    G.correctAnswers++;
+    G.combo++;
+    G.streak++;
+    G.score+=10+(G.streak>2?G.streak*3:0);
+    $('math-modal').classList.remove('open');
+
+    // Apply effects
+    G.buoyancy+=p.b;
+    if(p.hull) G.hull=Math.max(0,Math.min(100,G.hull+p.hull));
+
+    addLog(`✓ ${p.b<0?p.b:'+'+p.b} buoyancy. Correct! (+${10+(G.streak>2?G.streak*3:0)} pts)`,'good');
+    if(G.streak>=3) showStreak(`${G.streak} streak! 🔥`);
+
+    renderStatus();
+    G.mathPending=null;
+    G.paused=false;
+    if(p.cb) p.cb();
+
+    // Check if need to drop cargo
+    if(G.buoyancy<=CRIT){
+      setTimeout(()=>openDropModal(),500);
+    }
+  } else {
+    G.streak=0; G.combo=0;
+    // Provide hint
+    const diff=val-p.answer;
+    let hint='';
+    if(val===Math.abs(p.answer)) hint='💡 Check the sign — the result is negative!';
+    else if(Math.abs(diff)===Math.abs(p.rhs)*2) hint='💡 Did you subtract instead of add?';
+    else if(Math.abs(diff)<=2) hint=`💡 Very close! You're off by ${diff>0?'+':''}${diff}.`;
+    else if(val===p.lhs) hint='💡 Remember to add the impact, not just state the starting buoyancy.';
+    else hint=`💡 Try again: ${p.lhs} + (${p.rhs}) = ?`;
+    $('math-hint').textContent=hint;
+    $('math-input').value='';
+    $('math-input').focus();
+    addLog('✗ Wrong answer. Try again.','bad');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// DROP CARGO MODAL
+// ═══════════════════════════════════════════════════════
+function openDropModal(){
+  if(G.cargo.length===0) return;
+  const choices=$('drop-choices');
+  choices.innerHTML='';
+  G.cargo.forEach(item=>{
+    const div=document.createElement('div');
+    div.className='drop-choice';
+    div.innerHTML=`
+      <div>
+        <div class="drop-choice-name">${item.icon} ${item.name}</div>
+        <div class="drop-choice-effect">${item.dropEffect}</div>
+      </div>
+      <div>
+        <div class="drop-choice-weight" style="color:#2ecc71;">+${Math.abs(item.b)} buoyancy</div>
+        <div style="color:#888;font-size:.68rem;">${item.kg}kg dropped</div>
+      </div>`;
+    div.addEventListener('click',()=>dropCargoItem(item));
+    choices.appendChild(div);
+  });
+  $('drop-modal').classList.add('open');
+}
+
+function dropCargoItem(item){
+  $('drop-modal').classList.remove('open');
+  G.paused=true;
+
+  openMathModal({
+    icon: item.icon,
+    name: `Dropping ${item.name}`,
+    story: `You order the crew to throw ${item.name} overboard. ${item.dropEffect}`,
+    b: Math.abs(item.b),  // positive — dropping cargo reduces weight
+    hull:0,
+    cb:()=>{
+      G.cargo=G.cargo.filter(c=>c.id!==item.id);
+      G.morale=Math.max(0,G.morale+(item.moralDrop||0));
+      buildCargoList();
+      renderStatus();
+      addLog(`⬇️ Dropped ${item.name}. +${Math.abs(item.b)} buoyancy.`,'neutral');
+      G.paused=false;
+    }
+  });
+}
+
+$('drop-cancel').addEventListener('click',()=>{
+  $('drop-modal').classList.remove('open');
+  addLog('⚠️ Cargo retained — buoyancy remains critical!','bad');
+});
+
+// ═══════════════════════════════════════════════════════
+// STATUS RENDERING
+// ═══════════════════════════════════════════════════════
+function renderStatus(){
+  // Buoyancy
+  const buoy=G.buoyancy;
+  const pct=Math.max(0,Math.min(100,(buoy-SINK)/(0-SINK)*100));
+  $('buoyancy-big').textContent=(buoy>0?'+':'')+buoy;
+  $('hud-buoy').textContent=(buoy>0?'+':'')+buoy;
+  $('buoy-fill').style.width=pct+'%';
+  $('buoyancy-big').className='';
+  if(buoy<=CRIT) $('buoyancy-big').className='critical';
+  else if(buoy<=WARN) $('buoyancy-big').className='danger';
+
+  // Hull
+  $('hull-fill').style.width=G.hull+'%';
+  $('hull-val').textContent=G.hull+'%';
+  $('hud-hull').textContent=G.hull+'%';
+  const hPct=G.hull/100;
+  $('hull-fill').style.background=hPct>.6?'#2ecc71':hPct>.3?'#f39c12':'#e74c3c';
+
+  // Morale
+  $('moral-fill').style.width=G.morale+'%';
+  $('moral-val').textContent=G.morale+'%';
+
+  // HUD
+  $('hud-dist').textContent=Math.floor(G.dist);
+  $('hud-score').textContent=G.score;
+  $('hud-acc').textContent=G.totalAnswers?Math.round(G.correctAnswers/G.totalAnswers*100)+'%':'—';
+
+  // Threat bar
+  const threat=Math.min(100, G.dist*0.5+(G.buoyancy-SINK)/(SINK*-1)*30);
+  $('threat-bar').style.width=Math.max(5,threat)+'%';
+
+  // Cargo total
+  const totalKg=G.cargo.reduce((s,c)=>s+c.kg,0);
+  const totalB=G.cargo.reduce((s,c)=>s+c.b,0);
+  $('cargo-total-val').textContent=totalKg.toLocaleString()+' kg';
+  $('cargo-buoy-sum').textContent=(totalB>0?'+':'')+totalB;
+  $('cargo-buoy-sum').style.color=totalB<=-35?'#e74c3c':totalB<=-20?'#f39c12':'#3498db';
+}
+
+function renderAll(){
+  renderOcean();
+  renderObstacles();
+  renderWheel();
+  renderHeading();
+  renderTimeOfDay();
+  renderCombo();
+  renderStatus();
+}
+
+function renderOcean(){
+  const canvas=$('ocean-canvas');
+  const vp=$('viewport');
+  canvas.width=vp.offsetWidth;
+  canvas.height=vp.offsetHeight*0.52;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+
+  G.waveOffset=(G.waveOffset+G.speed*0.8)%80;
+
+  // Perspective grid lines
+  ctx.clearRect(0,0,W,H);
+
+  // Horizon line at y=0 (ocean top)
+  // Receding lines toward horizon (perspective)
+  const vx=W*(0.3+G.steerVel*0.02); // vanishing point shifts with steering
+  ctx.strokeStyle='rgba(100,160,220,0.12)';
+  ctx.lineWidth=1;
+  for(let i=0;i<=12;i++){
+    const bx=W*i/12;
+    ctx.beginPath(); ctx.moveTo(vx,0); ctx.lineTo(bx,H); ctx.stroke();
+  }
+
+  // Wave rows (closer = bigger, more offset)
+  const numRows=8;
+  for(let r=0;r<numRows;r++){
+    const t=(r+1)/numRows;
+    const y=H*Math.pow(t,.7);
+    const waveH=4*t;
+    const waveLen=60+t*120;
+    const offset=G.waveOffset*(1+t*2);
+
+    ctx.strokeStyle=`rgba(100,160,220,${0.1+t*0.25})`;
+    ctx.lineWidth=waveH;
+    ctx.beginPath();
+    for(let x=0;x<=W+waveLen;x+=4){
+      const wy=y+Math.sin((x+offset)/waveLen*Math.PI*2)*waveH;
+      x===0?ctx.moveTo(x,wy):ctx.lineTo(x,wy);
+    }
+    ctx.stroke();
+  }
+
+  // Foam/spray at near bottom
+  ctx.fillStyle='rgba(180,220,255,0.07)';
+  for(let i=0;i<6;i++){
+    const fx=((i*137+G.waveOffset*3)%W);
+    const fy=H*0.7+Math.sin(G.waveOffset*0.1+i)*H*0.1;
+    ctx.beginPath();
+    ctx.ellipse(fx,fy,30+i*10,8,0,0,Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function renderObstacles(){
+  G.obstacles.forEach(o=>{
+    const el=$('obs'+o.id);
+    if(!el) return;
+    const vp=$('viewport');
+    const W=vp.offsetWidth, H=vp.offsetHeight;
+    const x=W*o.screenX/100;
+    const horizY=H*0.48;
+    const yOffset=Math.min((o.scale-0.05)*H*0.6,H*0.2);
+    const y=horizY+yOffset;
+    el.style.left=x+'px';
+    el.style.top=y+'px';
+    el.style.transform=`translate(-50%,-50%) scale(${Math.min(o.scale,1.6)})`;
+    el.style.opacity=Math.min(o.scale*2,1);
+
+    const warn=$('warn'+o.id);
+    if(warn) warn.style.display=o.scale<0.3&&!o.hit?'block':'none';
+  });
+}
+
+function renderWheel(){
+  $('wheel').style.transform=`rotate(${G.wheelAngle}deg)`;
+}
+
+function renderHeading(){
+  const dirs=['N','NE','E','SE','S','SW','W','NW'];
+  const idx=Math.round(G.heading/45)%8;
+  $('heading-val').textContent=dirs[idx];
+  $('speed-val').textContent=G.speed.toFixed(1)+'×';
+}
+
+function renderTimeOfDay(){
+  const t=G.timeOfDay;
+  // Sky color
+  let skyTop,skyBot,showSun,showMoon,starOp;
+  if(t<0.25){ // dawn to noon
+    const p=t/0.25;
+    skyTop=lerpColor('#0a1628','#1a3a6e',p);
+    skyBot=lerpColor('#4a2a00','#4a7bc8',p);
+    showSun=true; showMoon=false; starOp=1-p;
+  } else if(t<0.5){ // noon to dusk
+    const p=(t-0.25)/0.25;
+    skyTop=lerpColor('#1a3a6e','#2a0a00',p);
+    skyBot=lerpColor('#4a7bc8','#8B3000',p);
+    showSun=true; showMoon=false; starOp=p*0.3;
+  } else if(t<0.75){ // dusk to midnight
+    const p=(t-0.5)/0.25;
+    skyTop=lerpColor('#2a0a00','#050510',p);
+    skyBot=lerpColor('#8B3000','#050510',p);
+    showSun=false; showMoon=true; starOp=p;
+  } else { // midnight to dawn
+    const p=(t-0.75)/0.25;
+    skyTop=lerpColor('#050510','#0a1628',p);
+    skyBot=lerpColor('#050510','#4a2a00',p);
+    showSun=false; showMoon=true; starOp=1-p*0.7;
+  }
+
+  const sky=$('sky');
+  sky.style.background=`linear-gradient(180deg,${skyTop} 0%,${skyBot} 100%)`;
+  $('sun').style.opacity=showSun?1:0;
+  $('moon').style.display=showMoon?'block':'none';
+  $('stars').style.opacity=starOp;
+
+  const timeNames=['🌅 Dawn','☀️ Morning','🌞 Noon','🌇 Dusk','🌆 Evening','🌙 Night','🌃 Midnight','🌄 Pre-dawn'];
+  const ti=Math.floor(t*8);
+  $('time-display').textContent=`${timeNames[ti]} | Day ${G.day}`;
+
+  // Ocean color
+  const ocean=$('ocean');
+  const oceanDark=t>.5&&t<.85;
+  ocean.style.background=oceanDark?
+    'linear-gradient(180deg,#050f1a 0%,#030c14 30%,#020810 100%)':
+    'linear-gradient(180deg,#1a3a5c 0%,#0d2438 30%,#071520 100%)';
+}
+
+function renderCombo(){
+  if(G.combo>=3){
+    $('combo-display').textContent=`🔥 ${G.combo}× combo`;
+    $('combo-display').style.opacity='1';
+  } else {
+    $('combo-display').style.opacity='0';
+  }
+}
+
+function lerpColor(a,b,t){
+  const parse=c=>{const r=parseInt(c.slice(1),16);return[(r>>16)&255,(r>>8)&255,r&255];};
+  const A=parse(a),B=parse(b);
+  const r=A.map((v,i)=>Math.round(v+(B[i]-v)*t));
+  return `#${r.map(v=>v.toString(16).padStart(2,'0')).join('')}`;
+}
+
+// ═══════════════════════════════════════════════════════
+// ENVIRONMENT
+// ═══════════════════════════════════════════════════════
+function updateEnvironment(dt){
+  // Random weather changes (rare)
+  if(Math.random()<0.0002){
+    const weathers=['clear','clear','clear','rain','storm','fog'];
+    G.weatherState=weathers[Math.floor(Math.random()*weathers.length)];
+    applyWeather();
+  }
+}
+
+function applyWeather(){
+  $('rain-layer').style.opacity=G.weatherState==='rain'||G.weatherState==='storm'?'1':'0';
+  $('fog-layer').style.opacity=G.weatherState==='fog'?'1':'0';
+}
+
+// ═══════════════════════════════════════════════════════
+// SINK CHECK
+// ═══════════════════════════════════════════════════════
+function checkSink(){
+  if(G.buoyancy<=SINK) gameOver();
+  if(G.hull<=0) gameOver('hull');
+}
+
+// ═══════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════
+function flashDamage(){
+  const ov=$('damage-overlay');
+  ov.classList.remove('flash');
+  void ov.offsetWidth;
+  ov.classList.add('flash');
+  const vp=$('viewport');
+  vp.classList.remove('shake');
+  void vp.offsetWidth;
+  vp.classList.add('shake');
+}
+
+function showStreak(msg){
+  const el=$('streak-display');
+  el.textContent=msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.classList.remove('show'),2000);
+}
+
+function addLog(msg,type='neutral'){
+  const log=$('event-log');
+  const d=document.createElement('div');
+  d.className='log-entry '+type;
+  d.textContent=msg;
+  log.prepend(d);
+  if(log.children.length>30) log.lastChild.remove();
+}
+
+function pauseGame(){
+  G.paused=true;
+}
+function resumeGame(){
+  if(!G.paused) return;
+  G.paused=false;
+  G.lastTs=performance.now();
+  scheduleLoop();
+}
+
+function buildCargoList(){
+  const list=$('cargo-list');
+  list.innerHTML='';
+  G.cargo.forEach(item=>{
+    const d=document.createElement('div');
+    d.className='cargo-row';
+    d.id='cargo-'+item.id;
+    d.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div class="cargo-name">${item.icon} ${item.name}</div>
+        <button class="cargo-drop-btn" data-drop-id="${item.id}">Drop</button>
+      </div>
+      <div class="cargo-weight">${item.b} buoyancy | ${item.kg}kg</div>
+      <div class="cargo-effect">${item.dropEffect}</div>`;
+    d.querySelector('.cargo-drop-btn').addEventListener('click',()=>dropCargoItem(item));
+    list.appendChild(d);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// KEYBOARD INPUT
+// ═══════════════════════════════════════════════════════
+const keys={};
+document.addEventListener('keydown',e=>{
+  if(!G.playing) return;
+  keys[e.key]=true;
+
+  if(e.key===' '){
+    e.preventDefault();
+    playerFireCannon();
+  }
+  if(e.key==='ArrowLeft'||e.key==='a'){
+    G.steerVel=-1;
+  }
+  if(e.key==='ArrowRight'||e.key==='d'){
+    G.steerVel=1;
+  }
+  if((e.key==='ArrowUp'||e.key==='w')&&!$('math-modal').classList.contains('open')){
+    G.speed=Math.min(3,G.speed+0.2);
+  }
+  if((e.key==='ArrowDown'||e.key==='s')&&!$('math-modal').classList.contains('open')){
+    G.speed=Math.max(0.2,G.speed-0.2);
+  }
+  if(e.key==='p'||e.key==='P'){
+    if(G.paused&&!$('math-modal').classList.contains('open')) resumeGame();
+    else pauseGame();
+  }
+  if(e.key==='D'||e.key==='d'){ // D = open drop modal
+    if(e.shiftKey) openDropModal();
+  }
+  // Aim adjustment during combat
+  if(G.inCombat){
+    if(e.key==='ArrowLeft') G.aimX=Math.max(5,G.aimX-8);
+    if(e.key==='ArrowRight') G.aimX=Math.min(95,G.aimX+8);
+    updateCannonSight();
+  }
+});
+
+document.addEventListener('keyup',e=>{
+  if(e.key==='ArrowLeft'||e.key==='a') G.steerVel=0;
+  if(e.key==='ArrowRight'||e.key==='d') G.steerVel=0;
+});
+
+function updateCannonSight(){
+  const sight=$('cannon-sight');
+  const vp=$('viewport');
+  const W=vp.offsetWidth;
+  sight.style.left=(G.aimX-4)+'%';
+}
+
+$('fire-btn').addEventListener('click',playerFireCannon);
+
+// ═══════════════════════════════════════════════════════
+// GAME START / OVER
+// ═══════════════════════════════════════════════════════
+function startGame(){
+  $('screen-overlay').style.display='none';
+  G={...G,
+    playing:true,paused:false,loopId:null,lastTs:performance.now(),
+    dist:0,score:0,correctAnswers:0,totalAnswers:0,
+    buoyancy:0,hull:100,morale:80,
+    heading:90,speed:1.0,wheelAngle:0,steerVel:0,
+    obstacles:[],nextObsId:0,pirates:[],activePirate:null,
+    pirateAmmo:true,aimX:50,inCombat:false,
+    mathPending:null,eventTimer:0,eventQueue:[],scriptedTimers:{},
+    combo:0,streak:0,waveOffset:0,weatherState:'clear',
+    day:1,timeOfDay:0.1,
+  };
+  pirateCooldown=25+Math.random()*15;
+  obsSpawnTimer=8;
+  initGame();
+  G.lastTs=performance.now();
+  scheduleLoop();
+}
+
+function gameOver(reason='sink'){
+  G.playing=false; G.paused=false;
+  if(G.loopId){cancelAnimationFrame(G.loopId);clearTimeout(G.loopId);G.loopId=null;}
+  Object.values(G.scriptedTimers).forEach(t=>clearTimeout(t));
+  endPirateCombat(false);
+
+  $('screen-title').textContent=reason==='hull'?'💥 Hull Destroyed!':'⚓ The Ship Has Sunk!';
+  $('screen-sub').textContent='Your voyage has ended. Study the results and try again, Captain.';
+  $('key-grid').style.display='none';
+  const gs=$('gameover-stats');
+  gs.style.display='block';
+  const acc=G.totalAnswers?Math.round(G.correctAnswers/G.totalAnswers*100):0;
+  gs.innerHTML=`
+    <div class="go-stat">Distance sailed <span>${Math.floor(G.dist)} km</span></div>
+    <div class="go-stat">Final score <span>${G.score}</span></div>
+    <div class="go-stat">Math accuracy <span>${acc}%</span></div>
+    <div class="go-stat">Days survived <span>${G.day}</span></div>
+    <div class="go-stat">Final buoyancy <span>${G.buoyancy}</span></div>
+    <div class="go-stat">Hull integrity <span>${G.hull}%</span></div>
+    <div class="go-stat">Cargo remaining <span>${G.cargo.length} items</span></div>`;
+  $('screen-btn').textContent='⚓ Sail Again';
+  $('screen-overlay').style.display='flex';
+}
+
+$('screen-btn').addEventListener('click',startGame);
+
+// Show welcome screen on load
+window.addEventListener('load',()=>{
+  $('screen-overlay').style.display='flex';
+  // Build initial sky for background
+  buildStars();
+});
+</script>
+</body>
+</html>
