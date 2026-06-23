@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voyage Home — Captain's Decision</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Georgia',serif;}
+body{background:#000;overflow:hidden;user-select:none;}
+#app{width:100vw;height:100vh;display:flex;flex-direction:column;background:#050302;}
+
+/* ── TOP BAR ─────────────────────────────────────────── */
+#topbar{height:56px;background:linear-gradient(180deg,#1f1206,#0d0700);
+  border-bottom:3px solid #6b4a1e;display:flex;align-items:center;gap:18px;
+  padding:0 18px;color:#d9b466;font-size:.8rem;z-index:50;}
+#topbar .title{font-size:1.05rem;font-weight:bold;letter-spacing:.04em;margin-right:auto;}
+#topbar b{color:#fff;}
+#home-progress{flex:0 0 220px;}
+#home-progress .lbl{font-size:.65rem;text-align:center;margin-bottom:2px;}
+#home-bar-bg{height:10px;background:#1a0e04;border-radius:5px;border:1px solid #4a3318;overflow:hidden;position:relative;}
+#home-bar-fill{height:100%;background:linear-gradient(90deg,#2e6b3e,#4ecf6b);transition:width .6s;}
+#home-ship-icon{position:absolute;top:-7px;font-size:.9rem;transform:translateX(-50%);transition:left .6s;}
+#view-toggle{background:#241406;border:1px solid #6b4a1e;color:#d9b466;border-radius:6px;
+  padding:6px 14px;font-size:.78rem;cursor:pointer;}
+#view-toggle:hover{background:#382008;}
+
+/* ── MAIN BODY ───────────────────────────────────────── */
+#body-area{flex:1;display:flex;overflow:hidden;}
+#left-panel{width:210px;background:#0a0703;border-right:2px solid #2a1a08;
+  display:flex;flex-direction:column;overflow:hidden;}
+#right-panel{width:190px;background:#0a0703;border-left:2px solid #2a1a08;
+  display:flex;flex-direction:column;overflow:hidden;}
+#viewport{flex:1;position:relative;overflow:hidden;}
+
+#left-panel h3,#right-panel h3{color:#d9b466;font-size:.74rem;letter-spacing:.09em;
+  padding:9px 11px 5px;border-bottom:1px solid #2a1a08;text-transform:uppercase;}
+#cargo-list{flex:1;overflow-y:auto;padding:7px;}
+.cargo-row{background:#120c05;border:1px solid #2a1a08;border-radius:6px;
+  margin-bottom:6px;padding:7px 9px;}
+.cargo-name{color:#e8d5a0;font-size:.75rem;font-weight:bold;}
+.cargo-sub{color:#7a6a4a;font-size:.66rem;margin-top:1px;}
+
+#status-block{padding:10px 11px;}
+.stat-label{color:#8a7a5a;font-size:.66rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px;}
+.stat-bar-bg{height:9px;background:#15100a;border-radius:5px;overflow:hidden;margin-bottom:9px;}
+.stat-bar-fill{height:100%;border-radius:5px;transition:width .4s;}
+.stat-val{color:#fff;font-size:.8rem;font-weight:bold;margin-bottom:7px;}
+#buoy-big{font-size:1.7rem;font-weight:bold;text-align:center;margin:5px 0;color:#5aa7e0;}
+#buoy-big.danger{color:#e0a040;}
+#buoy-big.critical{color:#e05050;animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+#sink-label{color:#7a6a4a;font-size:.64rem;text-align:center;margin-bottom:8px;}
+#log{flex:1;overflow-y:auto;padding:7px 11px;}
+.log-entry{font-size:.66rem;color:#9a8a6a;padding:3px 0;border-bottom:1px solid #1a140a;line-height:1.3;}
+.log-entry.bad{color:#e07050;}
+.log-entry.good{color:#5ac06a;}
+.log-entry.neutral{color:#d9b466;}
+
+/* ── VIEWPORT SHARED ─────────────────────────────────── */
+#sky{position:absolute;left:0;right:0;top:0;height:48%;
+  background:linear-gradient(180deg,#1a3a6e 0%,#3a6aa8 60%,#6a9bd0 100%);}
+#sun{position:absolute;width:54px;height:54px;border-radius:50%;top:10%;left:68%;
+  background:radial-gradient(circle,#fff9e0 20%,#ffe680 55%,rgba(255,200,0,0) 100%);
+  box-shadow:0 0 36px 16px rgba(255,220,100,.22);}
+#ocean{position:absolute;left:0;right:0;bottom:0;height:52%;
+  background:linear-gradient(180deg,#1a3a5c 0%,#0d2438 35%,#06121e 100%);overflow:hidden;}
+#ocean-canvas{position:absolute;left:0;top:0;width:100%;height:100%;}
+#horizon-line{position:absolute;left:0;right:0;top:0;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(120,170,220,.6),transparent);}
+
+/* ── SHIP VIEW (third-person, whole galleon) ────────── */
+#ship-view-layer{position:absolute;left:0;right:0;bottom:0;top:0;display:none;}
+#ship-view-layer.active{display:block;}
+#galleon{position:absolute;left:50%;bottom:18%;transform:translateX(-50%);
+  width:280px;height:200px;filter:drop-shadow(0 12px 14px rgba(0,0,0,.55));}
+.hull{position:absolute;bottom:0;left:10%;width:80%;height:38px;
+  background:linear-gradient(180deg,#5a3414,#2a1604);
+  border-radius:0 0 50% 50% / 0 0 60% 60%;border:2px solid #1a0d02;}
+.deck-rail{position:absolute;bottom:34px;left:14%;width:72%;height:6px;background:#3a2008;border-radius:3px;}
+.mast{position:absolute;bottom:34px;width:6px;background:linear-gradient(180deg,#4a2a0c,#2a1604);border-radius:2px;}
+.mast.main{left:48%;height:150px;}
+.mast.fore{left:22%;height:100px;}
+.mast.aft{left:74%;height:90px;}
+.sail{position:absolute;background:linear-gradient(180deg,#d8cba0,#b5a578);
+  border:1px solid #8a7a50;border-radius:6px 6px 30% 30% / 6px 6px 50% 50%;}
+.sail.main{left:36%;bottom:96px;width:90px;height:74px;}
+.sail.fore{left:13%;bottom:64px;width:64px;height:54px;}
+.sail.aft{left:67%;bottom:60px;width:56px;height:46px;}
+.flag{position:absolute;top:-6px;left:48%;font-size:1.1rem;animation:flagWave 2s ease-in-out infinite;}
+@keyframes flagWave{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(8deg)}}
+.bowsprit{position:absolute;bottom:30px;left:6%;width:50px;height:4px;background:#3a2008;
+  transform:rotate(-12deg);border-radius:2px;}
+.gunport{position:absolute;bottom:8px;width:7px;height:7px;background:#0a0502;border-radius:50%;}
+#galleon-wake{position:absolute;left:50%;bottom:14%;transform:translateX(-50%);
+  width:320px;height:30px;background:radial-gradient(ellipse,rgba(200,230,255,.25),transparent 70%);}
+#galleon.tilt-l{transform:translateX(-50%) rotate(-3deg);}
+#galleon.tilt-r{transform:translateX(-50%) rotate(3deg);}
+
+/* ── HELM VIEW (first-person wheel close-up) ─────────── */
+#helm-view-layer{position:absolute;left:0;right:0;bottom:0;top:0;display:none;}
+#helm-view-layer.active{display:block;}
+#helm-frame{position:absolute;bottom:0;left:0;right:0;height:62%;
+  background:linear-gradient(180deg,rgba(20,12,4,0) 0%,rgba(20,12,4,.5) 40%,rgba(15,9,3,.92) 100%);}
+#wheel-big-wrap{position:absolute;bottom:-90px;left:50%;transform:translateX(-50%);}
+#wheel-big{width:380px;height:380px;position:relative;transition:transform .15s ease;}
+.wheel-rim{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle,transparent 58%,#5a3414 60%,#3a2008 72%,#5a3414 74%,transparent 76%);
+  box-shadow:0 0 30px rgba(0,0,0,.6) inset;}
+.wheel-hub{position:absolute;left:50%;top:50%;width:58px;height:58px;transform:translate(-50%,-50%);
+  border-radius:50%;background:radial-gradient(circle,#caa454,#8a6a2a 60%,#5a4014);
+  border:3px solid #3a2a0c;box-shadow:0 4px 10px rgba(0,0,0,.5);}
+.wheel-spoke{position:absolute;left:50%;top:50%;width:8px;height:170px;
+  background:linear-gradient(180deg,#caa454,#7a5a24,#caa454);
+  transform-origin:top center;border-radius:4px;box-shadow:1px 0 3px rgba(0,0,0,.4);}
+.wheel-handle{position:absolute;left:50%;top:0;width:16px;height:32px;transform:translate(-50%,-10px);
+  background:linear-gradient(180deg,#8a6a2a,#5a4014);border-radius:4px;
+  box-shadow:0 2px 4px rgba(0,0,0,.5);}
+#captain-hands{position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);
+  font-size:3.4rem;z-index:5;filter:drop-shadow(0 6px 6px rgba(0,0,0,.6));}
+#helm-compass{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+  color:#d9b466;font-size:.78rem;text-align:center;letter-spacing:.07em;z-index:6;
+  background:rgba(20,12,4,.6);padding:4px 14px;border-radius:8px;border:1px solid #4a3318;}
+#helm-lantern{position:absolute;bottom:160px;font-size:1.6rem;filter:drop-shadow(0 0 10px rgba(255,180,60,.7));
+  animation:lanternSway 3s ease-in-out infinite;}
+#helm-lantern.left{left:8%;}
+#helm-lantern.right{right:8%;transform:scaleX(-1);}
+@keyframes lanternSway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+#helm-lantern.right{animation:lanternSwayR 3s ease-in-out infinite;}
+@keyframes lanternSwayR{0%,100%{transform:scaleX(-1) rotate(-4deg)}50%{transform:scaleX(-1) rotate(4deg)}}
+
+/* ── EVENT APPROACH (visible in both views) ──────────── */
+#event-obj{position:absolute;font-size:3rem;pointer-events:none;z-index:15;
+  transition:none;display:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,.6));}
+#event-warning{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+  background:rgba(140,20,10,.92);color:#fff;border:2px solid #e05030;border-radius:8px;
+  padding:6px 18px;font-size:.82rem;font-weight:bold;z-index:40;display:none;
+  animation:warnGlow 1.1s infinite;}
+@keyframes warnGlow{0%,100%{box-shadow:0 0 8px rgba(255,60,30,.5)}50%{box-shadow:0 0 22px rgba(255,60,30,.9)}}
+
+/* ── DECISION PANEL (replaces old spammy modal) ──────── */
+#decision-panel{position:absolute;left:50%;bottom:5%;transform:translateX(-50%);
+  width:min(560px,92%);background:linear-gradient(180deg,#1a1006,#0d0703);
+  border:2px solid #6b4a1e;border-radius:14px;padding:18px 22px;z-index:60;
+  box-shadow:0 10px 40px rgba(0,0,0,.7);display:none;}
+#decision-panel.open{display:block;}
+#dec-icon{font-size:2.4rem;text-align:center;margin-bottom:4px;}
+#dec-title{color:#d9b466;font-size:1.05rem;font-weight:bold;text-align:center;margin-bottom:4px;}
+#dec-story{color:#a89570;font-size:.8rem;text-align:center;margin-bottom:14px;line-height:1.45;}
+#dec-choices{display:flex;gap:12px;}
+.dec-choice{flex:1;background:#120c05;border:1px solid #3a2810;border-radius:10px;
+  padding:12px;cursor:pointer;transition:border-color .2s,background .2s;}
+.dec-choice:hover{border-color:#caa454;background:#1c1408;}
+.dec-choice-label{color:#e8d5a0;font-size:.85rem;font-weight:bold;margin-bottom:4px;}
+.dec-choice-desc{color:#8a7a5a;font-size:.7rem;line-height:1.4;}
+
+/* ── MATH PANEL (tied to chosen decision) ────────────── */
+#math-panel{position:absolute;left:50%;bottom:5%;transform:translateX(-50%);
+  width:min(480px,92%);background:linear-gradient(180deg,#0c1726,#06101c);
+  border:2px solid #2e5a8a;border-radius:14px;padding:18px 22px;z-index:61;
+  box-shadow:0 10px 40px rgba(0,0,0,.7);display:none;text-align:center;}
+#math-panel.open{display:block;}
+#math-context{color:#9ab4d4;font-size:.78rem;margin-bottom:10px;line-height:1.4;}
+#math-eq{background:#081320;border-radius:8px;padding:12px;margin-bottom:12px;font-size:1.2rem;}
+#math-eq .lhs{color:#e8d5a0;}
+#math-eq .op{color:#caa454;margin:0 6px;}
+#math-eq .rhs{color:#e07050;font-weight:bold;}
+#math-eq .eq{color:#7a8a9a;margin:0 6px;}
+#math-eq .q{color:#5aa7e0;font-weight:bold;}
+#math-input-row{display:flex;gap:8px;margin-bottom:8px;}
+#math-input{flex:1;background:#081320;border:2px solid #2e4a6a;border-radius:8px;
+  color:#fff;font-size:1.2rem;text-align:center;padding:7px;outline:none;font-family:'Georgia',serif;}
+#math-input:focus{border-color:#caa454;}
+#math-submit{background:#0e3a18;border:2px solid #4ecf6b;color:#4ecf6b;border-radius:8px;
+  padding:7px 18px;font-size:.92rem;cursor:pointer;font-family:'Georgia',serif;}
+#math-submit:hover{background:#155024;}
+#math-hint{color:#e0a040;font-size:.74rem;min-height:1.1em;}
+
+/* ── SAIL STATUS STRIP ───────────────────────────────── */
+#sail-strip{position:absolute;top:14px;right:14px;color:#caa454;font-size:.74rem;
+  text-align:right;z-index:30;text-shadow:0 2px 4px rgba(0,0,0,.8);}
+
+/* ── WELCOME / END SCREEN ────────────────────────────── */
+#screen-overlay{position:fixed;inset:0;background:rgba(4,2,0,.94);z-index:200;
+  display:flex;align-items:center;justify-content:center;}
+#screen-box{background:linear-gradient(180deg,#1a1006,#0d0703);border:2px solid #6b4a1e;
+  border-radius:18px;padding:38px;max-width:540px;width:90%;text-align:center;
+  box-shadow:0 0 70px rgba(0,0,0,1);}
+#screen-box h1{color:#d9b466;font-size:1.9rem;margin-bottom:10px;}
+#screen-box .sub{color:#a89570;font-size:.85rem;margin-bottom:22px;line-height:1.6;}
+.key-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:22px;text-align:left;}
+.key-item{background:#0c0703;border-radius:8px;padding:7px 11px;border:1px solid #2a1a08;}
+.key-item .key{color:#caa454;font-size:.76rem;font-weight:bold;}
+.key-item .kd{color:#8a7a5a;font-size:.7rem;margin-top:1px;}
+#screen-btn{background:linear-gradient(180deg,#3a6a2a,#1e4015);border:2px solid #4ecf6b;
+  color:#fff;border-radius:10px;padding:13px 38px;font-size:1.05rem;cursor:pointer;
+  font-family:'Georgia',serif;letter-spacing:.04em;}
+#screen-btn:hover{background:linear-gradient(180deg,#4a7a3a,#2a5020);}
+#go-stats{background:#0c0703;border-radius:10px;padding:14px;margin-bottom:18px;display:none;}
+.go-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a140a;
+  color:#a89570;font-size:.82rem;}
+.go-row:last-child{border:none;}
+.go-row span{color:#fff;font-weight:bold;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <div class="title">⚓ Voyage Home</div>
+    <div class="hud">Day <b id="hud-day">1</b></div>
+    <div class="hud">Score <b id="hud-score">0</b></div>
+    <div class="hud">Hull <b id="hud-hull">100%</b></div>
+    <div id="home-progress">
+      <div class="lbl">DISTANCE TO HOME</div>
+      <div id="home-bar-bg">
+        <div id="home-bar-fill" style="width:0%"></div>
+        <div id="home-ship-icon" style="left:0%;">⛵</div>
+      </div>
+    </div>
+    <button id="view-toggle">🔭 Switch to Helm View</button>
+  </div>
+
+  <div id="body-area">
+
+    <div id="left-panel">
+      <h3>⚓ Cargo Hold</h3>
+      <div id="cargo-list"></div>
+    </div>
+
+    <div id="viewport">
+      <div id="sky"><div id="sun"></div></div>
+      <div id="ocean"><div id="horizon-line"></div><canvas id="ocean-canvas"></canvas></div>
+
+      <!-- SHIP VIEW -->
+      <div id="ship-view-layer" class="active">
+        <div id="galleon-wake"></div>
+        <div id="galleon">
+          <div class="mast fore"></div><div class="mast main"></div><div class="mast aft"></div>
+          <div class="sail fore"></div><div class="sail main"></div><div class="sail aft"></div>
+          <div class="hull">
+            <div class="gunport" style="left:18%;"></div>
+            <div class="gunport" style="left:38%;"></div>
+            <div class="gunport" style="left:58%;"></div>
+            <div class="gunport" style="left:78%;"></div>
+          </div>
+          <div class="deck-rail"></div>
+          <div class="bowsprit"></div>
+          <div class="flag">🏴‍☠️</div>
+        </div>
+      </div>
+
+      <!-- HELM VIEW -->
+      <div id="helm-view-layer">
+        <div id="helm-lantern" class="left">🏮</div>
+        <div id="helm-lantern" class="right">🏮</div>
+        <div id="helm-frame"></div>
+        <div id="wheel-big-wrap">
+          <div id="wheel-big">
+            <div class="wheel-rim"></div>
+            <div class="wheel-hub"></div>
+          </div>
+          <div id="captain-hands">🤲</div>
+        </div>
+        <div id="helm-compass">Heading: <b id="helm-heading-val">E</b> &nbsp;|&nbsp; Speed: <b id="helm-speed-val">1.0×</b></div>
+      </div>
+
+      <div id="event-obj">🌊</div>
+      <div id="event-warning">⚠ SOMETHING AHEAD</div>
+      <div id="sail-strip" id="sail-strip-text">Steady as she goes…</div>
+
+      <!-- Decision panel -->
+      <div id="decision-panel">
+        <div id="dec-icon">🌊</div>
+        <div id="dec-title">Event</div>
+        <div id="dec-story">Story text.</div>
+        <div id="dec-choices"></div>
+      </div>
+
+      <!-- Math panel -->
+      <div id="math-panel">
+        <div id="math-context">Context text</div>
+        <div id="math-eq">
+          <span class="lhs" id="m-lhs">-28</span><span class="op" id="m-op">+</span>
+          <span class="rhs" id="m-rhs">(-15)</span><span class="eq">=</span><span class="q">?</span>
+        </div>
+        <div id="math-input-row">
+          <input id="math-input" type="text" placeholder="Your answer…" autocomplete="off">
+          <button id="math-submit">Confirm</button>
+        </div>
+        <div id="math-hint"></div>
+      </div>
+    </div>
+
+    <div id="right-panel">
+      <h3>🛡 Ship Status</h3>
+      <div id="status-block">
+        <div class="stat-label">Hull Integrity</div>
+        <div class="stat-bar-bg"><div class="stat-bar-fill" id="hull-fill" style="width:100%;background:#4ecf6b;"></div></div>
+        <div class="stat-val" id="hull-val">100%</div>
+
+        <div class="stat-label">Buoyancy</div>
+        <div class="stat-bar-bg"><div class="stat-bar-fill" id="buoy-fill" style="width:50%;background:#5aa7e0;"></div></div>
+        <div id="buoy-big">-28</div>
+        <div id="sink-label">/ -50 sinks</div>
+
+        <div class="stat-label">Crew Morale</div>
+        <div class="stat-bar-bg"><div class="stat-bar-fill" id="moral-fill" style="width:80%;background:#9b6fc6;"></div></div>
+        <div class="stat-val" id="moral-val">80%</div>
+      </div>
+      <h3>📜 Captain's Log</h3>
+      <div id="log"></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="screen-overlay">
+  <div id="screen-box">
+    <h1 id="screen-title">⚓ Voyage Home</h1>
+    <div class="sub" id="screen-sub">
+      You captain a galleon far from home, cargo hold heavy. Sail the open sea, face storms and
+      pirates, and make the calls only a captain can make — each decision leads to a different
+      calculation. Survive long enough, and bring her home.
+    </div>
+    <div class="key-grid">
+      <div class="key-item"><div class="key">← / → Arrows</div><div class="kd">Steer port / starboard</div></div>
+      <div class="key-item"><div class="key">↑ / ↓ Arrows</div><div class="kd">Speed up / slow down</div></div>
+      <div class="key-item"><div class="key">V</div><div class="kd">Switch Ship View / Helm View</div></div>
+      <div class="key-item"><div class="key">1 / 2</div><div class="kd">Pick a decision when prompted</div></div>
+    </div>
+    <div id="go-stats"></div>
+    <button id="screen-btn">⚓ Set Sail</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════ DATA ═══════════════════════════════════════
+const CARGO_DB=[
+  {id:'food',   name:'Food Supplies',  icon:'🍖', kg:800, b:-8},
+  {id:'water',  name:'Fresh Water',    icon:'💧', kg:600, b:-6},
+  {id:'medical',name:'Medical Chest',  icon:'⚕️', kg:300, b:-3},
+  {id:'charts', name:'Nav. Charts',    icon:'🗺️', kg:50,  b:-1},
+  {id:'rope',   name:'Spare Rope',     icon:'🪢', kg:400, b:-4},
+  {id:'gold',   name:'Gold Cargo',     icon:'🪙', kg:1200,b:-12},
+];
+
+// Each event: two choices, each choice has its own math problem TYPE and numbers.
+// op: 'add' (a+b=?), 'mul' (a*b=?), 'div' (a/b=?, integer)
+const EVENTS=[
+  {
+    id:'storm', icon:'⛈️', name:'Storm on the Horizon',
+    story:'Dark clouds gather ahead. You can punch through the storm or take the long route around it.',
+    choices:[
+      {label:'Sail through the storm',
+       desc:'Faster, but the waves will slam the hull hard.',
+       op:'add', b:-22, hull:-10, homeKm:0,
+       context:(lhs)=>`Storm impact on buoyancy: current buoyancy ${lhs}, storm adds (−22).`},
+      {label:'Go around — long route',
+       desc:'Safer, but adds distance before you reach home.',
+       op:'add', b:-6, hull:-2, homeKm:+18,
+       context:(lhs)=>`Detour costs little buoyancy: current buoyancy ${lhs}, detour adds (−6). But +18km added to your trip home.`},
+    ]
+  },
+  {
+    id:'pirate', icon:'🏴‍☠️', name:'Pirate Ship Sighted',
+    story:'A pirate vessel cuts across your path. Will you stand and fight, or run for it?',
+    choices:[
+      {label:'Fight — fire the cannons',
+       desc:'Each cannon does 6 damage. You have 4 cannons ready — total damage to calculate.',
+       op:'mul', a:6, b:4, applyAs:'hull-mul', homeKm:0,
+       context:()=>`Each cannon deals 6 damage to the pirate ship. You fire 4 cannons. Total damage = ?`},
+      {label:'Flee — full sail ahead',
+       desc:'You can escape, but it costs buoyancy from cargo tossed for speed.',
+       op:'add', b:-9, hull:0, homeKm:0,
+       context:(lhs)=>`Tossing crates for speed: current buoyancy ${lhs}, fleeing costs (−9).`},
+    ]
+  },
+  {
+    id:'rocks', icon:'🪨', name:'Reef Ahead',
+    story:'A reef breaks the surface dead ahead. A risky shortcut lies through a narrow gap.',
+    choices:[
+      {label:'Risk the narrow shortcut',
+       desc:'Saves time, but scrapes the hull if you misjudge it.',
+       op:'add', b:-14, hull:-12, homeKm:-12,
+       context:(lhs)=>`Threading the reef: current buoyancy ${lhs}, the scrape costs (−14). Saves 12km toward home.`},
+      {label:'Sail the safe wide arc',
+       desc:'No damage, but adds distance to your voyage.',
+       op:'add', b:-2, hull:0, homeKm:+10,
+       context:(lhs)=>`Wide arc around the reef: current buoyancy ${lhs}, minor cost (−2). Adds 10km to the trip.`},
+    ]
+  },
+  {
+    id:'rations', icon:'🍞', name:'Crew Rationing',
+    story:'Supplies are running low. The quartermaster needs your call on rationing for the days ahead.',
+    choices:[
+      {label:'Divide rations evenly',
+       desc:'Fair, but you must calculate how much food per day for the rest of the voyage.',
+       op:'div', a:120, b:8, applyAs:'morale-div-good', homeKm:0,
+       context:()=>`You have 120 food units left and 8 days of sailing ahead. Food per day = ?`},
+      {label:'Cut rations now to save later',
+       desc:'Crew morale drops immediately, but buoyancy improves from lighter food stores.',
+       op:'add', b:+5, hull:0, moraleAdj:-15, homeKm:0,
+       context:(lhs)=>`Cutting food stores: current buoyancy ${lhs}, lighter load adds (+5).`},
+    ]
+  },
+  {
+    id:'merchant', icon:'🏪', name:'Merchant Ship Hails You',
+    story:'A merchant offers to trade lighter goods for some of your heavy cargo.',
+    choices:[
+      {label:'Trade gold for water barrels',
+       desc:'Lightens the gold cargo, but you take on a bit of water weight.',
+       op:'add', b:+9, hull:0, homeKm:0,
+       context:(lhs)=>`Trading heavy gold for lighter barrels: current buoyancy ${lhs}, trade adds (+9).`},
+      {label:'Decline and continue on',
+       desc:'No risk, no reward — straight sailing.',
+       op:'add', b:0, hull:0, homeKm:0,
+       context:(lhs)=>`No trade made: current buoyancy ${lhs}, change is (+0). Confirm to continue.`},
+    ]
+  },
+  {
+    id:'whale', icon:'🐋', name:'Whale Pod Crossing',
+    story:'A pod of whales surfaces in your path — utterly indifferent to your schedule.',
+    choices:[
+      {label:'Slow down and wait it out',
+       desc:'Costs time (added distance-equivalent) but no damage.',
+       op:'add', b:-1, hull:0, homeKm:+6,
+       context:(lhs)=>`Waiting for the pod: current buoyancy ${lhs}, negligible cost (−1). Adds 6km of delay.`},
+      {label:'Push through carefully',
+       desc:'Risky — a tail strike could rattle the hull.',
+       op:'add', b:-13, hull:-9, homeKm:0,
+       context:(lhs)=>`Pushing through the pod: current buoyancy ${lhs}, a strike costs (−13).`},
+    ]
+  },
+];
+
+const SINK=-50, WARN=-35, CRIT=-45;
+
+// ═══════════════════════════════════════ STATE ═══════════════════════════════════════
+let G = {};
+const $=id=>document.getElementById(id);
+
+function freshState(){
+  return {
+    playing:false, paused:false, loopId:null, lastTs:0,
+    view:'ship', // 'ship' | 'helm'
+    heading:90, speed:1.0, wheelAngle:0, steerVel:0,
+    hull:100, morale:80,
+    cargo:['food','water','medical','charts','rope'].map(id=>({...CARGO_DB.find(c=>c.id===id)})),
+    buoyancy:0,
+    homeTotalKm:240, homeRemainingKm:240,
+    day:1, score:0,
+    waveOffset:0,
+    nextEventAt:0, eventActive:false, currentEvent:null, currentChoice:null,
+    eventObjState:'hidden', eventObjAge:0,
+  };
+}
+
+// ═══════════════════════════════════════ INIT ═══════════════════════════════════════
+function initGame(){
+  G.buoyancy = G.cargo.reduce((s,c)=>s+c.b,0);
+  buildCargoList();
+  renderStatus();
+  scheduleNextEvent(8+Math.random()*6);
+  addLog('⚓ Anchors up. Home is 240km across open water.','neutral');
+}
+
+function buildCargoList(){
+  const list=$('cargo-list'); list.innerHTML='';
+  G.cargo.forEach(item=>{
+    const d=document.createElement('div');
+    d.className='cargo-row';
+    d.innerHTML=`<div class="cargo-name">${item.icon} ${item.name}</div>
+      <div class="cargo-sub">${item.b} buoyancy · ${item.kg}kg</div>`;
+    list.appendChild(d);
+  });
+}
+
+// ═══════════════════════════════════════ LOOP ═══════════════════════════════════════
+function scheduleLoop(){
+  if(document.hidden){ G.loopId=setTimeout(()=>gameLoop(performance.now()),16); }
+  else { G.loopId=requestAnimationFrame(gameLoop); }
+}
+
+function gameLoop(ts){
+  if(!G.playing||G.paused){ return; }
+  const dt=Math.min((ts-G.lastTs)/1000,.05);
+  G.lastTs=ts;
+
+  updateSailing(dt);
+  updateEventTimer(dt);
+  updateEventObjAnim(dt);
+  renderViewport();
+  renderStatus();
+  scheduleLoop();
+}
+
+function updateSailing(dt){
+  G.heading += G.steerVel*dt*16;
+  G.heading=((G.heading%360)+360)%360;
+  G.wheelAngle += G.steerVel*dt*150;
+
+  const kmPerSec = G.speed*0.6;
+  G.homeRemainingKm = Math.max(0, G.homeRemainingKm - kmPerSec*dt);
+  G.day = Math.floor((G.homeTotalKm-G.homeRemainingKm)/12)+1;
+
+  if(G.homeRemainingKm<=0){ winGame(); }
+}
+
+function updateEventTimer(dt){
+  if(G.eventActive) return;
+  G.nextEventAt -= dt;
+  if(G.nextEventAt<=0){
+    triggerEvent();
+  }
+}
+
+// ═══════════════════════════════════════ EVENTS ═══════════════════════════════════════
+function scheduleNextEvent(sec){
+  G.nextEventAt = sec!==undefined?sec:(22+Math.random()*18);
+}
+
+function triggerEvent(){
+  if(!G.playing) return;
+  G.eventActive=true;
+  const ev=EVENTS[Math.floor(Math.random()*EVENTS.length)];
+  G.currentEvent=ev;
+
+  // Approach animation: show icon scaling up over ~2.5s, then open decision panel
+  $('event-warning').style.display='block';
+  $('event-warning').textContent=`⚠ ${ev.name.toUpperCase()} APPROACHING`;
+  const obj=$('event-obj');
+  obj.textContent=ev.icon;
+  obj.style.display='block';
+  G.eventObjAge=0;
+  G.eventObjState='approaching';
+}
+
+function updateEventObjAnim(dt){
+  if(G.eventObjState!=='approaching') return;
+  G.eventObjAge+=dt;
+  const t=Math.min(G.eventObjAge/2.4,1);
+  const obj=$('event-obj');
+  const vp=$('viewport');
+  const W=vp.offsetWidth, H=vp.offsetHeight;
+  const scale=0.2+t*1.3;
+  const x=W*0.5, y=H*0.42 - t*H*0.04;
+  obj.style.left=x+'px'; obj.style.top=y+'px';
+  obj.style.transform=`translate(-50%,-50%) scale(${scale})`;
+  obj.style.opacity=Math.min(t*2,1);
+
+  if(t>=1){
+    G.eventObjState='waiting';
+    $('event-warning').style.display='none';
+    openDecisionPanel(G.currentEvent);
+  }
+}
+
+function openDecisionPanel(ev){
+  G.paused=true;
+  $('dec-icon').textContent=ev.icon;
+  $('dec-title').textContent=ev.name;
+  $('dec-story').textContent=ev.story;
+  const choicesEl=$('dec-choices'); choicesEl.innerHTML='';
+  ev.choices.forEach((c,i)=>{
+    const d=document.createElement('div');
+    d.className='dec-choice';
+    d.innerHTML=`<div class="dec-choice-label">${i+1}. ${c.label}</div>
+      <div class="dec-choice-desc">${c.desc}</div>`;
+    d.addEventListener('click',()=>chooseDecision(ev,c));
+    choicesEl.appendChild(d);
+  });
+  $('decision-panel').classList.add('open');
+}
+
+function chooseDecision(ev,choice){
+  $('decision-panel').classList.remove('open');
+  G.currentChoice=choice;
+  openMathPanel(ev,choice);
+}
+
+// ═══════════════════════════════════════ MATH PANEL ═══════════════════════════════════
+function openMathPanel(ev,choice){
+  const lhs=G.buoyancy;
+  let answer, eqHTML;
+
+  if(choice.op==='add'){
+    answer = lhs+choice.b;
+    eqHTML = `<span class="lhs">${lhs}</span><span class="op">+</span>
+      <span class="rhs">(${choice.b>=0?'+':''}${choice.b})</span><span class="eq">=</span><span class="q">?</span>`;
+  } else if(choice.op==='mul'){
+    answer = choice.a*choice.b;
+    eqHTML = `<span class="lhs">${choice.a}</span><span class="op">×</span>
+      <span class="rhs">${choice.b}</span><span class="eq">=</span><span class="q">?</span>`;
+  } else if(choice.op==='div'){
+    answer = choice.a/choice.b;
+    eqHTML = `<span class="lhs">${choice.a}</span><span class="op">÷</span>
+      <span class="rhs">${choice.b}</span><span class="eq">=</span><span class="q">?</span>`;
+  }
+
+  G.mathPending={ev,choice,answer,lhs};
+  $('math-context').textContent = choice.context(lhs);
+  $('math-eq').innerHTML = eqHTML;
+  $('math-hint').textContent='';
+  $('math-input').value='';
+  $('math-panel').classList.add('open');
+  setTimeout(()=>$('math-input').focus(),80);
+}
+
+function checkMath(){
+  const p=G.mathPending; if(!p) return;
+  const val=parseFloat($('math-input').value);
+  if(isNaN(val)){ $('math-hint').textContent='⚠ Enter a number!'; return; }
+
+  if(val===p.answer){
+    applyChoiceOutcome(p.ev,p.choice,val);
+    $('math-panel').classList.remove('open');
+    resetEventState();
+    G.score+=15;
+    G.paused=false;
+    renderStatus();
+    G.lastTs=performance.now();
+    scheduleLoop();
+  } else {
+    const diff=val-p.answer;
+    let hint;
+    if(p.choice.op==='add'){
+      if(val===Math.abs(p.answer)) hint='💡 Check the sign of your result.';
+      else if(Math.abs(diff)<=2) hint=`💡 Close! Off by ${diff>0?'+':''}${diff}.`;
+      else hint=`💡 ${p.lhs} + (${p.choice.b}) = ?  Try again.`;
+    } else if(p.choice.op==='mul'){
+      hint=`💡 ${p.choice.a} × ${p.choice.b} = ?  Multiply carefully.`;
+    } else {
+      hint=`💡 ${p.choice.a} ÷ ${p.choice.b} = ?  Divide evenly.`;
+    }
+    $('math-hint').textContent=hint;
+    $('math-input').value=''; $('math-input').focus();
+  }
+}
+
+function applyChoiceOutcome(ev,choice,val){
+  if(choice.applyAs==='hull-mul'){
+    // pirate combat: damage dealt back reduces incoming hull damage proportional to correctness (already correct)
+    addLog(`💥 Cannons deal ${val} damage — pirate ship retreats!`,'good');
+    G.hull = Math.max(0, G.hull - 4); // small unavoidable graze
+  } else if(choice.applyAs==='morale-div-good'){
+    addLog(`🍞 Rationing set at ${val} units/day. Crew approves the fairness.`,'good');
+    G.morale = Math.min(100, G.morale+5);
+  } else {
+    G.buoyancy += (choice.b||0);
+    if(choice.hull) G.hull = Math.max(0, Math.min(100, G.hull+choice.hull));
+    if(choice.moraleAdj) G.morale = Math.max(0, Math.min(100, G.morale+choice.moraleAdj));
+    const sign=(choice.b||0)<0?'':'+';
+    addLog(`⚓ ${ev.name}: chose "${choice.label}" (${sign}${choice.b||0} buoyancy)`, (choice.b||0)<0?'bad':'good');
+  }
+
+  if(choice.homeKm){
+    G.homeRemainingKm = Math.max(0, G.homeRemainingKm + choice.homeKm);
+    addLog(`🧭 Route changed: ${choice.homeKm>0?'+':''}${choice.homeKm}km to home.`,'neutral');
+  }
+
+  checkEnd();
+}
+
+function resetEventState(){
+  G.eventActive=false;
+  G.currentEvent=null; G.currentChoice=null; G.mathPending=null;
+  G.eventObjState='hidden';
+  $('event-obj').style.display='none';
+  scheduleNextEvent();
+}
+
+function checkEnd(){
+  if(G.buoyancy<=SINK){ gameOver('sink'); return; }
+  if(G.hull<=0){ gameOver('hull'); return; }
+  if(G.buoyancy<=CRIT){
+    addLog('⚠️ Buoyancy critical! Consider your next decision carefully.','bad');
+  }
+}
+
+$('math-submit').addEventListener('click',checkMath);
+$('math-input').addEventListener('keydown',e=>{ if(e.key==='Enter') checkMath(); });
+
+// ═══════════════════════════════════════ RENDER ═══════════════════════════════════════
+function renderViewport(){
+  renderOceanCanvas();
+  renderShipTilt();
+  renderHelm();
+  renderTopbar();
+}
+
+function renderOceanCanvas(){
+  const canvas=$('ocean-canvas'), vp=$('viewport');
+  canvas.width=vp.offsetWidth; canvas.height=vp.offsetHeight*0.52;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+  G.waveOffset=(G.waveOffset+G.speed*0.8)%80;
+  ctx.clearRect(0,0,W,H);
+  const vx=W*(0.5+G.steerVel*0.015);
+  ctx.strokeStyle='rgba(100,160,220,0.10)';
+  for(let i=0;i<=10;i++){
+    const bx=W*i/10;
+    ctx.beginPath(); ctx.moveTo(vx,0); ctx.lineTo(bx,H); ctx.stroke();
+  }
+  for(let r=0;r<8;r++){
+    const t=(r+1)/8;
+    const y=H*Math.pow(t,.7);
+    const waveH=4*t, waveLen=60+t*120;
+    const offset=G.waveOffset*(1+t*2);
+    ctx.strokeStyle=`rgba(110,170,230,${0.08+t*0.22})`;
+    ctx.lineWidth=waveH;
+    ctx.beginPath();
+    for(let x=0;x<=W+waveLen;x+=5){
+      const wy=y+Math.sin((x+offset)/waveLen*Math.PI*2)*waveH;
+      x===0?ctx.moveTo(x,wy):ctx.lineTo(x,wy);
+    }
+    ctx.stroke();
+  }
+}
+
+function renderShipTilt(){
+  const g=$('galleon');
+  g.className = G.steerVel<-0.1?'tilt-l':G.steerVel>0.1?'tilt-r':'';
+}
+
+function renderHelm(){
+  $('wheel-big').style.transform=`rotate(${G.wheelAngle}deg)`;
+  const dirs=['N','NE','E','SE','S','SW','W','NW'];
+  const idx=Math.round(G.heading/45)%8;
+  $('helm-heading-val').textContent=dirs[idx];
+  $('helm-speed-val').textContent=G.speed.toFixed(1)+'×';
+}
+
+function renderTopbar(){
+  $('hud-day').textContent=G.day;
+  $('hud-score').textContent=G.score;
+  $('hud-hull').textContent=G.hull+'%';
+  const pctDone = (G.homeTotalKm-G.homeRemainingKm)/G.homeTotalKm*100;
+  $('home-bar-fill').style.width=pctDone+'%';
+  $('home-ship-icon').style.left=pctDone+'%';
+  $('sail-strip-text') && ($('sail-strip').textContent = G.eventActive?'Eyes on the horizon…':`${Math.round(G.homeRemainingKm)}km to home`);
+}
+
+function renderStatus(){
+  const pct=Math.max(0,Math.min(100,(G.buoyancy-SINK)/(0-SINK)*100));
+  $('buoy-big').textContent=(G.buoyancy>0?'+':'')+Math.round(G.buoyancy);
+  $('buoy-fill').style.width=pct+'%';
+  $('buoy-big').className = G.buoyancy<=CRIT?'critical':G.buoyancy<=WARN?'danger':'';
+
+  $('hull-fill').style.width=G.hull+'%';
+  $('hull-val').textContent=G.hull+'%';
+  const hp=G.hull/100;
+  $('hull-fill').style.background = hp>.6?'#4ecf6b':hp>.3?'#e0a040':'#e05050';
+
+  $('moral-fill').style.width=G.morale+'%';
+  $('moral-val').textContent=G.morale+'%';
+}
+
+function addLog(msg,type='neutral'){
+  const log=$('log');
+  const d=document.createElement('div');
+  d.className='log-entry '+type;
+  d.textContent=msg;
+  log.prepend(d);
+  if(log.children.length>40) log.lastChild.remove();
+}
+
+// ═══════════════════════════════════════ VIEW TOGGLE ═══════════════════════════════════
+function setView(v){
+  G.view=v;
+  $('ship-view-layer').classList.toggle('active', v==='ship');
+  $('helm-view-layer').classList.toggle('active', v==='helm');
+  $('view-toggle').textContent = v==='ship'? '🔭 Switch to Helm View':'🚢 Switch to Ship View';
+}
+$('view-toggle').addEventListener('click',()=>setView(G.view==='ship'?'helm':'ship'));
+
+// ═══════════════════════════════════════ INPUT ═══════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(!G.playing) return;
+  if(e.key==='v'||e.key==='V'){ setView(G.view==='ship'?'helm':'ship'); return; }
+
+  if($('decision-panel').classList.contains('open')){
+    if(e.key==='1'||e.key==='2'){
+      const idx=parseInt(e.key,10)-1;
+      const ev=G.currentEvent;
+      if(ev && ev.choices[idx]) chooseDecision(ev, ev.choices[idx]);
+    }
+    return;
+  }
+  if($('math-panel').classList.contains('open')) return;
+
+  if(e.key==='ArrowLeft'||e.key==='a') G.steerVel=-1;
+  if(e.key==='ArrowRight'||e.key==='d') G.steerVel=1;
+  if(e.key==='ArrowUp'||e.key==='w') G.speed=Math.min(2.5,G.speed+0.2);
+  if(e.key==='ArrowDown'||e.key==='s') G.speed=Math.max(0.3,G.speed-0.2);
+});
+document.addEventListener('keyup',e=>{
+  if(e.key==='ArrowLeft'||e.key==='a') G.steerVel=0;
+  if(e.key==='ArrowRight'||e.key==='d') G.steerVel=0;
+});
+
+// ═══════════════════════════════════════ START / END ═══════════════════════════════════
+function startGame(){
+  $('screen-overlay').style.display='none';
+  G=freshState();
+  G.playing=true; G.lastTs=performance.now();
+  setView('ship');
+  initGame();
+  scheduleLoop();
+}
+
+function winGame(){
+  G.playing=false; G.paused=false;
+  if(G.loopId){cancelAnimationFrame(G.loopId);clearTimeout(G.loopId);}
+  $('screen-title').textContent='⚓ Land Ho! You Made It Home!';
+  $('screen-sub').textContent='The harbor lights welcome your weary crew. A voyage well sailed, Captain.';
+  showEndStats();
+}
+
+function gameOver(reason){
+  G.playing=false; G.paused=false;
+  if(G.loopId){cancelAnimationFrame(G.loopId);clearTimeout(G.loopId);}
+  $('screen-title').textContent = reason==='hull'?'💥 The Hull Gave Way':'🌊 The Ship Has Sunk';
+  $('screen-sub').textContent='Your voyage ends here, short of home. Study your choices and sail again.';
+  showEndStats();
+}
+
+function showEndStats(){
+  document.querySelector('.key-grid').style.display='none';
+  const gs=$('go-stats'); gs.style.display='block';
+  gs.innerHTML=`
+    <div class="go-row">Distance sailed <span>${Math.round(G.homeTotalKm-G.homeRemainingKm)} / ${G.homeTotalKm} km</span></div>
+    <div class="go-row">Score <span>${G.score}</span></div>
+    <div class="go-row">Days at sea <span>${G.day}</span></div>
+    <div class="go-row">Final buoyancy <span>${Math.round(G.buoyancy)}</span></div>
+    <div class="go-row">Hull integrity <span>${G.hull}%</span></div>`;
+  $('screen-btn').textContent='⚓ Sail Again';
+  $('screen-overlay').style.display='flex';
+}
+
+$('screen-btn').addEventListener('click',startGame);
+</script>
+</body>
+</html>
